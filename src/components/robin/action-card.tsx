@@ -10,6 +10,7 @@ const actionLabels: Record<string, string> = {
   update_task_deadline: "Moved deadline",
   create_task: "Created task",
   update_task_status: "Updated status",
+  update_task_priority: "Changed priority",
   create_goal: "Created goal",
 };
 

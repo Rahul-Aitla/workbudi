@@ -103,6 +103,32 @@ async function updateTaskStatus(
   return { success: true, task: data };
 }
 
+async function updateTaskPriority(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  params: { task_id: string; new_priority: number }
+) {
+  if (![1, 2, 3, 4, 5].includes(params.new_priority)) {
+    throw new Error(
+      `Invalid priority: ${params.new_priority}. Must be 1-5.`
+    );
+  }
+
+  const { data, error } = await supabase
+    .from("tasks")
+    .update({
+      priority: params.new_priority,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", params.task_id)
+    .eq("user_id", userId)
+    .select("id, title, priority")
+    .single();
+
+  if (error) throw new Error(`Failed to update priority: ${error.message}`);
+  return { success: true, task: data };
+}
+
 export async function POST(request: Request) {
   const supabase = await createClient();
   const {
@@ -127,6 +153,9 @@ export async function POST(request: Request) {
         break;
       case "update_task_status":
         result = await updateTaskStatus(supabase, user.id, params as { task_id: string; new_status: string });
+        break;
+      case "update_task_priority":
+        result = await updateTaskPriority(supabase, user.id, params as { task_id: string; new_priority: number });
         break;
       case "create_goal":
         result = await createGoal(supabase, user.id, params as { title: string; description?: string });

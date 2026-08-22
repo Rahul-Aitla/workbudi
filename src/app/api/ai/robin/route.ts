@@ -145,6 +145,7 @@ CAPABILITIES
 - Create new goals when the user describes an outcome
 - Move task deadlines when requested
 - Change task status when asked
+- Change task priority when asked
 
 ========================================
 OUTPUT FORMAT
@@ -165,6 +166,7 @@ Available actions:
 - update_task_deadline: {"action": "update_task_deadline", "params": {"task_id": "uuid", "new_deadline": "YYYY-MM-DD"}}
 - create_task: {"action": "create_task", "params": {"title": "string", "priority": 1-5, "deadline": "YYYY-MM-DD or null", "description": "string"}}
 - update_task_status: {"action": "update_task_status", "params": {"task_id": "uuid", "new_status": "todo/in_progress/done"}}
+- update_task_priority: {"action": "update_task_priority", "params": {"task_id": "uuid", "new_priority": 1-5}}
 - create_goal: {"action": "create_goal", "params": {"title": "string", "description": "optional description"}}
 
 ========================================
