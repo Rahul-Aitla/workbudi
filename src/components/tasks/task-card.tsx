@@ -36,9 +36,9 @@ export function TaskCard({ task, email, onEdit, onDelete }: TaskCardProps) {
   return (
     <Card className={isOverdue ? "border-red-300" : ""}>
       <CardHeader className="pb-2">
-        <div className="flex items-start justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
           <CardTitle className="text-lg">{task.title}</CardTitle>
-          <div className="flex gap-1">
+          <div className="flex flex-wrap gap-1">
             <Badge className={priority.color}>P{task.priority}</Badge>
             <Badge variant="outline">{statusLabels[task.status]}</Badge>
             {task.source === "email" && (
@@ -87,7 +87,7 @@ export function TaskCard({ task, email, onEdit, onDelete }: TaskCardProps) {
 
             {emailExpanded && (
               <div className="px-3 pb-3 space-y-2 border-t">
-                <div className="flex items-center gap-4 text-xs text-muted-foreground pt-2">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-xs text-muted-foreground pt-2">
                   <span>From: {email.from_name || email.from_address}</span>
                   <span>{email.received_at ? new Date(email.received_at).toLocaleDateString() : ""}</span>
                 </div>

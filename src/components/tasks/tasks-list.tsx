@@ -103,8 +103,8 @@ export function TasksList({ initialTasks, userId }: TasksListProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-2">
           {(["all", "todo", "in_progress", "done"] as const).map((f) => (
             <Button
               key={f}
@@ -119,7 +119,7 @@ export function TasksList({ initialTasks, userId }: TasksListProps) {
             </Button>
           ))}
         </div>
-        <Button onClick={() => { setEditingTask(null); setShowForm(true); }}>
+        <Button onClick={() => { setEditingTask(null); setShowForm(true); }} className="sm:w-auto w-full">
           + New Task
         </Button>
       </div>
