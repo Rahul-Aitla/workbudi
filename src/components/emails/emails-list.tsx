@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "@/components/ui/toast";
 
 interface GmailEmail {
   id: string;
@@ -27,8 +28,6 @@ export function EmailsList({ userId }: EmailsListProps) {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [processing, setProcessing] = useState(false);
-  const [syncResult, setSyncResult] = useState<string | null>(null);
-  const [processResult, setProcessResult] = useState<string | null>(null);
   const [gmailConnected, setGmailConnected] = useState(false);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
@@ -50,10 +49,7 @@ export function EmailsList({ userId }: EmailsListProps) {
 
   const handleSync = useCallback(async (silent = false) => {
     if (!accessToken) return;
-    if (!silent) {
-      setSyncing(true);
-      setSyncResult(null);
-    }
+    if (!silent) setSyncing(true);
 
     try {
       const res = await fetch("/api/gmail/sync", {
@@ -64,14 +60,16 @@ export function EmailsList({ userId }: EmailsListProps) {
       const data = await res.json();
 
       if (data.error) {
-        if (!silent) setSyncResult(`Error: ${data.error}`);
+        if (!silent) toast.add({ type: "error", title: "Sync failed", description: data.error });
       } else {
-        if (!silent) setSyncResult(`Synced ${data.synced} new emails (${data.total} total found)`);
+        if (!silent && data.synced > 0) {
+          toast.add({ type: "success", title: "Emails synced", description: `${data.synced} new email(s) found` });
+        }
         await fetchEmails();
         setLastSyncTime(new Date());
       }
     } catch (error) {
-      if (!silent) setSyncResult("Sync failed. Check console for details.");
+      if (!silent) toast.add({ type: "error", title: "Sync failed", description: "Check console for details" });
       console.error("Sync failed:", error);
     } finally {
       if (!silent) setSyncing(false);
@@ -79,10 +77,7 @@ export function EmailsList({ userId }: EmailsListProps) {
   }, [accessToken, fetchEmails]);
 
   const handleProcess = useCallback(async (silent = false) => {
-    if (!silent) {
-      setProcessing(true);
-      setProcessResult(null);
-    }
+    if (!silent) setProcessing(true);
 
     try {
       const res = await fetch("/api/ai/understand", {
@@ -93,14 +88,16 @@ export function EmailsList({ userId }: EmailsListProps) {
       const data = await res.json();
 
       if (data.error) {
-        if (!silent) setProcessResult(`Error: ${data.error}`);
+        if (!silent) toast.add({ type: "error", title: "Processing failed", description: data.error });
       } else {
         const tasksCreated = data.results?.filter((r: { extraction: { action_required: boolean } }) => r.extraction.action_required).length ?? 0;
-        if (!silent) setProcessResult(`Processed ${data.processed} emails. Found ${tasksCreated} actionable items.`);
+        if (!silent && data.processed > 0) {
+          toast.add({ type: "success", title: "Emails processed", description: `${tasksCreated} task(s) created/updated from ${data.processed} email(s)` });
+        }
         await fetchEmails();
       }
     } catch (error) {
-      if (!silent) setProcessResult("Processing failed. Check console.");
+      if (!silent) toast.add({ type: "error", title: "Processing failed", description: "Check console for details" });
       console.error("Process failed:", error);
     } finally {
       if (!silent) setProcessing(false);
@@ -258,18 +255,16 @@ export function EmailsList({ userId }: EmailsListProps) {
         </div>
       </CardHeader>
       <CardContent>
-        {(syncResult || processResult) && (
-          <div className="space-y-1 mb-3">
-            {syncResult && <p className="text-sm text-muted-foreground">{syncResult}</p>}
-            {processResult && <p className="text-sm text-green-600">{processResult}</p>}
-          </div>
-        )}
         {loading ? (
           <p className="text-sm text-muted-foreground">Loading emails...</p>
         ) : emails.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No emails synced yet. Click &quot;Sync Emails&quot; to fetch your recent emails.
-          </p>
+          <div className="text-center py-8">
+            <svg className="mx-auto h-10 w-10 text-muted-foreground/50 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+            </svg>
+            <p className="text-sm font-medium">No emails synced yet</p>
+            <p className="text-xs text-muted-foreground mt-1">Emails will appear here automatically when synced.</p>
+          </div>
         ) : (
           <div className="space-y-3">
             {emails.map((email) => (
