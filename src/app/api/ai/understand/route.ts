@@ -23,7 +23,9 @@ export async function POST(request: Request) {
     emailsQuery = emailsQuery.in("id", email_ids);
   }
 
-  const { data: emails, error: fetchError } = await emailsQuery.limit(5);
+  const { data: emails, error: fetchError } = await emailsQuery
+    .order("received_at", { ascending: true })
+    .limit(5);
 
   if (fetchError || !emails) {
     return NextResponse.json({ error: "Failed to fetch emails" }, { status: 500 });
