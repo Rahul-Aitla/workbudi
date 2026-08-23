@@ -10,20 +10,26 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { access_token } = await request.json();
+  // Fetch access token from DB instead of accepting from client
+  const { data: account } = await supabase
+    .from("linked_accounts")
+    .select("access_token")
+    .eq("user_id", user.id)
+    .eq("provider", "google")
+    .single();
 
-  if (!access_token) {
-    return NextResponse.json({ error: "Missing access_token" }, { status: 400 });
+  if (!account?.access_token) {
+    return NextResponse.json({ error: "Gmail not connected" }, { status: 400 });
   }
 
   const oauth2Client = new google.auth.OAuth2();
-  oauth2Client.setCredentials({ access_token });
+  oauth2Client.setCredentials({ access_token: account.access_token });
 
   const gmail = google.gmail({ version: "v1", auth: oauth2Client });
 
   try {
     console.log("[Gmail Sync] Starting sync for user:", user.id);
-    console.log("[Gmail Sync] Token length:", access_token.length);
+    console.log("[Gmail Sync] Token length:", account.access_token.length);
 
     // Fetch last 50 inbox emails
     const listRes = await gmail.users.messages.list({

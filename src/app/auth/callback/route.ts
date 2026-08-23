@@ -6,6 +6,9 @@ export async function GET(request: Request) {
   const code = searchParams.get("code");
   const next = searchParams.get("next") ?? "/dashboard";
 
+  // Validate next is a relative path to prevent open redirect
+  const safeNext = next.startsWith("/") && !next.includes("://") ? next : "/dashboard";
+
   if (code) {
     const supabase = await createClient();
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
@@ -49,7 +52,7 @@ export async function GET(request: Request) {
       // If no provider_token, the scopes might not be configured in Supabase.
       // User can still use the app, just Gmail features won't work until tokens are stored.
 
-      return NextResponse.redirect(`${origin}${next}`);
+      return NextResponse.redirect(`${origin}${safeNext}`);
     }
   }
 

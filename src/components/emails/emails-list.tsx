@@ -45,7 +45,11 @@ export function EmailsList({ userId }: EmailsListProps) {
   const [autoPolling, setAutoPolling] = useState(false);
   const [hasSynced, setHasSynced] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const emailsRef = useRef(emails);
   const supabase = createClient();
+
+  // Keep ref in sync with state
+  emailsRef.current = emails;
 
   const fetchEmails = useCallback(async () => {
     const { data } = await supabase
@@ -67,7 +71,7 @@ export function EmailsList({ userId }: EmailsListProps) {
       const res = await fetch("/api/gmail/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ access_token: accessToken }),
+        body: JSON.stringify({}),
       });
       const data = await res.json();
 
@@ -90,7 +94,7 @@ export function EmailsList({ userId }: EmailsListProps) {
   }, [accessToken, fetchEmails]);
 
   const handleProcess = useCallback(async (silent = false) => {
-    const currentUnprocessed = emails.filter((e) => !e.processed).length;
+    const currentUnprocessed = emailsRef.current.filter((e) => !e.processed).length;
     if (currentUnprocessed === 0) return;
     if (!silent) setProcessing(true);
 
@@ -117,7 +121,7 @@ export function EmailsList({ userId }: EmailsListProps) {
     } finally {
       if (!silent) setProcessing(false);
     }
-  }, [emails, fetchEmails]);
+  }, [fetchEmails]);
 
   const runAutoPoll = useCallback(async () => {
     if (!accessToken) return;
