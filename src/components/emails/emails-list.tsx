@@ -23,6 +23,17 @@ interface EmailsListProps {
 
 const POLL_INTERVAL = 30000;
 
+function formatTimeAgo(date: Date): string {
+  const seconds = Math.round((Date.now() - date.getTime()) / 1000);
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hr${hours > 1 ? "s" : ""} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days > 1 ? "s" : ""} ago`;
+}
+
 export function EmailsList({ userId }: EmailsListProps) {
   const [emails, setEmails] = useState<GmailEmail[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,7 +42,8 @@ export function EmailsList({ userId }: EmailsListProps) {
   const [gmailConnected, setGmailConnected] = useState(false);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
-  const [autoPolling, setAutoPolling] = useState(true);
+  const [autoPolling, setAutoPolling] = useState(false);
+  const [hasSynced, setHasSynced] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const supabase = createClient();
 
@@ -67,6 +79,7 @@ export function EmailsList({ userId }: EmailsListProps) {
         }
         await fetchEmails();
         setLastSyncTime(new Date());
+        setHasSynced(true);
       }
     } catch (error) {
       if (!silent) toast.add({ type: "error", title: "Sync failed", description: "Check console for details" });
@@ -77,6 +90,8 @@ export function EmailsList({ userId }: EmailsListProps) {
   }, [accessToken, fetchEmails]);
 
   const handleProcess = useCallback(async (silent = false) => {
+    const currentUnprocessed = emails.filter((e) => !e.processed).length;
+    if (currentUnprocessed === 0) return;
     if (!silent) setProcessing(true);
 
     try {
@@ -102,7 +117,7 @@ export function EmailsList({ userId }: EmailsListProps) {
     } finally {
       if (!silent) setProcessing(false);
     }
-  }, [fetchEmails]);
+  }, [emails, fetchEmails]);
 
   const runAutoPoll = useCallback(async () => {
     if (!accessToken) return;
@@ -111,7 +126,11 @@ export function EmailsList({ userId }: EmailsListProps) {
   }, [accessToken, handleSync, handleProcess]);
 
   useEffect(() => {
-    checkGmailConnection();
+    const init = async () => {
+      await checkGmailConnection();
+      await fetchEmails();
+    };
+    init();
   }, []);
 
   useEffect(() => {
@@ -181,7 +200,6 @@ export function EmailsList({ userId }: EmailsListProps) {
       return;
     }
 
-    setLoading(false);
   };
 
   const handleConnectGmail = async () => {
@@ -224,9 +242,9 @@ export function EmailsList({ userId }: EmailsListProps) {
           {unprocessedCount > 0 && (
             <Badge variant="secondary" className="bg-amber-100 text-amber-700">{unprocessedCount} new</Badge>
           )}
-          {autoPolling && lastSyncTime && (
+          {lastSyncTime && (
             <span className="text-xs text-muted-foreground">
-              {syncing || processing ? "Syncing..." : `Last synced ${Math.round((Date.now() - lastSyncTime.getTime()) / 1000)}s ago`}
+              {syncing || processing ? "Syncing..." : `Last synced ${formatTimeAgo(lastSyncTime)}`}
             </span>
           )}
         </div>
@@ -252,7 +270,7 @@ export function EmailsList({ userId }: EmailsListProps) {
               onClick={() => handleProcess()}
               disabled={processing}
             >
-              {processing ? "Processing..." : `Process ${unprocessedCount}`}
+              {processing ? "Processing..." : `Process ${Math.min(5, unprocessedCount)}`}
             </Button>
           )}
         </div>
@@ -260,13 +278,24 @@ export function EmailsList({ userId }: EmailsListProps) {
       <CardContent>
         {loading ? (
           <p className="text-sm text-muted-foreground">Loading emails...</p>
+        ) : !hasSynced && emails.length === 0 ? (
+          <div className="text-center py-8">
+            <svg className="mx-auto h-10 w-10 text-muted-foreground/50 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+            </svg>
+            <p className="text-sm font-medium">Sync your Gmail to get started</p>
+            <p className="text-xs text-muted-foreground mt-1">Emails will be analyzed and turned into tasks automatically.</p>
+            <Button size="sm" className="mt-3" onClick={() => handleSync()} disabled={syncing}>
+              {syncing ? "Syncing..." : "Sync Gmail"}
+            </Button>
+          </div>
         ) : emails.length === 0 ? (
           <div className="text-center py-8">
             <svg className="mx-auto h-10 w-10 text-muted-foreground/50 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
             </svg>
-            <p className="text-sm font-medium">No emails synced yet</p>
-            <p className="text-xs text-muted-foreground mt-1">Emails will appear here automatically when synced.</p>
+            <p className="text-sm font-medium">No emails found</p>
+            <p className="text-xs text-muted-foreground mt-1">Your inbox is clean or no action-required emails were found.</p>
           </div>
         ) : (
           <div className="space-y-2">

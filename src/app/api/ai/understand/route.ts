@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     emailsQuery = emailsQuery.in("id", email_ids);
   }
 
-  const { data: emails, error: fetchError } = await emailsQuery.limit(20);
+  const { data: emails, error: fetchError } = await emailsQuery.limit(5);
 
   if (fetchError || !emails) {
     return NextResponse.json({ error: "Failed to fetch emails" }, { status: 500 });
@@ -244,19 +244,31 @@ export async function POST(request: Request) {
           });
         }
 
-      // Mark email as processed
-      await supabase
-        .from("emails")
-        .update({ processed: true })
-        .eq("id", email.id);
+      // Mark email as processed (only if AI didn't fail)
+      if (extraction.ai_failed) {
+        console.log(`[AI] Email ${email.id} AI failed — will retry later`);
+      } else {
+        await supabase
+          .from("emails")
+          .update({ processed: true })
+          .eq("id", email.id);
+      }
 
     } catch (error) {
       console.error(`[AI Understand] Error processing email ${email.id}:`, error);
     }
   }
 
+  // Count remaining unprocessed emails
+  const { count: remaining } = await supabase
+    .from("emails")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .eq("processed", false);
+
   return NextResponse.json({
     processed: emails.length,
+    remaining: remaining ?? 0,
     results,
   });
 }

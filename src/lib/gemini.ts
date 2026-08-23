@@ -11,6 +11,7 @@ interface EmailExtraction {
   priority: number;
   context: string;
   suggested_status: "todo" | "in_progress";
+  ai_failed: boolean;
   is_followup: boolean;
   followup_changes: {
     deadline_changed: boolean;
@@ -143,6 +144,7 @@ function parseExtraction(text: string): EmailExtraction {
       priority: 1,
       context: "Could not parse",
       suggested_status: "todo",
+      ai_failed: true,
       is_followup: false,
       followup_changes: null,
     };
@@ -159,6 +161,7 @@ function parseExtraction(text: string): EmailExtraction {
       suggested_status: ["todo", "in_progress"].includes(parsed.suggested_status)
         ? parsed.suggested_status
         : "todo",
+      ai_failed: false,
       is_followup: Boolean(parsed.is_followup),
       followup_changes: parsed.followup_changes || null,
     };
@@ -170,6 +173,7 @@ function parseExtraction(text: string): EmailExtraction {
       priority: 1,
       context: "JSON parse failed",
       suggested_status: "todo",
+      ai_failed: true,
       is_followup: false,
       followup_changes: null,
     };
@@ -300,6 +304,7 @@ export async function extractTaskFromEmail(
     priority: 1,
     context: "AI failed",
     suggested_status: "todo",
+    ai_failed: true,
     is_followup: false,
     followup_changes: null,
   };
