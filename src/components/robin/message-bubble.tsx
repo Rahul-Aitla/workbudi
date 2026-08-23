@@ -13,15 +13,13 @@ export interface TaskRecommendation {
   is_overdue?: boolean;
 }
 
-const priorityConfig: Record<number, { color: string; bg: string; border: string }> = {
-  1: { color: "text-blue-700", bg: "bg-blue-50", border: "border-blue-200" },
-  2: { color: "text-yellow-700", bg: "bg-yellow-50", border: "border-yellow-200" },
-  3: { color: "text-orange-700", bg: "bg-orange-50", border: "border-orange-200" },
-  4: { color: "text-red-600", bg: "bg-red-50", border: "border-red-200" },
-  5: { color: "text-red-700", bg: "bg-red-100", border: "border-red-300" },
+const priorityConfig: Record<number, { color: string; bg: string; border: string; label: string }> = {
+  1: { color: "text-blue-700", bg: "bg-blue-50", border: "border-blue-200", label: "Low" },
+  2: { color: "text-amber-700", bg: "bg-amber-50", border: "border-amber-200", label: "Medium" },
+  3: { color: "text-orange-700", bg: "bg-orange-50", border: "border-orange-200", label: "High" },
+  4: { color: "text-red-600", bg: "bg-red-50", border: "border-red-200", label: "Urgent" },
+  5: { color: "text-red-700", bg: "bg-red-100", border: "border-red-300", label: "Critical" },
 };
-
-const rankIcons = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"];
 
 function formatInline(text: string) {
   const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
@@ -49,14 +47,29 @@ function formatMarkdown(text: string) {
   });
 }
 
-export function RecommendationCard({ rec }: { rec: TaskRecommendation }) {
+function getDeadlineInfo(deadline: string): { text: string; className: string } {
+  const due = new Date(deadline);
+  const now = new Date();
+  const diffMs = due.getTime() - now.getTime();
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) return { text: `Overdue by ${Math.abs(diffDays)}d`, className: "text-red-600 bg-red-50" };
+  if (diffDays === 0) return { text: "Due today", className: "text-amber-600 bg-amber-50" };
+  if (diffDays === 1) return { text: "Due tomorrow", className: "text-amber-600 bg-amber-50" };
+  return { text: `Due in ${diffDays}d`, className: "text-muted-foreground bg-muted" };
+}
+
+export function RecommendationCard({ rec, isFirst }: { rec: TaskRecommendation; isFirst?: boolean }) {
   const p = priorityConfig[rec.priority] ?? priorityConfig[3];
+  const deadlineInfo = rec.deadline ? getDeadlineInfo(rec.deadline) : null;
 
   return (
-    <div className={`rounded-lg border ${p.border} ${p.bg} p-3 space-y-1.5`}>
+    <div className={`rounded-lg border ${p.border} ${p.bg} p-3 space-y-2 ${isFirst ? "ring-2 ring-primary/20" : ""}`}>
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-base shrink-0">{rankIcons[rec.rank - 1] || `${rec.rank}.`}</span>
+          {isFirst && (
+            <Badge className="bg-primary text-primary-foreground text-[10px] px-1.5 py-0 shrink-0">Focus first</Badge>
+          )}
           <span className="font-medium text-sm truncate">{rec.title}</span>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
@@ -64,20 +77,30 @@ export function RecommendationCard({ rec }: { rec: TaskRecommendation }) {
             <Badge variant="destructive" className="text-[10px] px-1.5 py-0">Overdue</Badge>
           )}
           <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${p.color} ${p.bg} border-current/20`}>
-            P{rec.priority}
+            P{rec.priority} · {p.label}
           </Badge>
         </div>
       </div>
-      {rec.deadline && (
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="12" cy="12" r="10" />
-            <path d="M12 6v6l4 2" />
-          </svg>
-          Due: {new Date(rec.deadline).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        {deadlineInfo && (
+          <span className={`flex items-center gap-1 px-1.5 py-0.5 rounded ${deadlineInfo.className}`}>
+            <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 6v6l4 2" />
+            </svg>
+            {deadlineInfo.text}
+          </span>
+        )}
+      </div>
+
+      {rec.why && (
+        <div className="rounded bg-white/50 px-2 py-1.5">
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            <span className="font-medium text-foreground">Why: </span>{rec.why}
+          </p>
         </div>
       )}
-      <p className="text-xs text-muted-foreground leading-relaxed">{rec.why}</p>
     </div>
   );
 }
@@ -97,7 +120,7 @@ export function MessageBubble({ msg }: { msg: { role: string; content: string; s
         {msg.recommendations && msg.recommendations.length > 0 && (
           <div className="space-y-2">
             {msg.recommendations.map((rec, j) => (
-              <RecommendationCard key={j} rec={rec} />
+              <RecommendationCard key={j} rec={rec} isFirst={j === 0} />
             ))}
           </div>
         )}

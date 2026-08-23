@@ -29,6 +29,8 @@ ALWAYS action_required=false for: job alerts, newsletters, marketing, system not
 
 ALWAYS action_required=true ONLY for: a real person asking you to do something, emails with a clear deadline, direct requests from colleagues/clients.
 
+IMPORTANT: Today is {today}. The current year is {year}. When extracting a deadline, ALWAYS use the current year ({year}) unless the email explicitly states a different year. If the email says "Monday" or "next week", calculate the actual date based on today ({today}).
+
 Return ONLY this JSON, nothing else:
 {"action_required":true/false,"task_title":"what to do or empty","deadline":"YYYY-MM-DD or null","priority":1-5,"context":"brief summary","suggested_status":"todo or in_progress","is_followup":false,"followup_changes":null}
 
@@ -103,6 +105,31 @@ function extractJson(text: string): string | null {
   return null;
 }
 
+function normalizeDeadline(deadline: string | null): string | null {
+  if (!deadline) return null;
+
+  // Try to parse the date
+  const parsed = new Date(deadline);
+  if (isNaN(parsed.getTime())) return null;
+
+  const now = new Date();
+  const currentYear = now.getFullYear();
+
+  // If the year is more than 1 year in the past, fix it to current year
+  if (parsed.getFullYear() < currentYear - 1) {
+    parsed.setFullYear(currentYear);
+    console.log(`[Date] Fixed year from ${deadline} to ${parsed.toISOString().split("T")[0]}`);
+  }
+
+  // If the date is more than 2 years in the future, it's probably wrong
+  if (parsed.getFullYear() > currentYear + 2) {
+    parsed.setFullYear(currentYear);
+    console.log(`[Date] Fixed future year from ${deadline} to ${parsed.toISOString().split("T")[0]}`);
+  }
+
+  return parsed.toISOString().split("T")[0];
+}
+
 function parseExtraction(text: string): EmailExtraction {
   const cleaned = stripThinking(text);
   console.log("[LLM] Cleaned response:", cleaned.slice(0, 300));
@@ -126,7 +153,7 @@ function parseExtraction(text: string): EmailExtraction {
     return {
       action_required: Boolean(parsed.action_required),
       task_title: String(parsed.task_title || "").slice(0, 100),
-      deadline: parsed.deadline || null,
+      deadline: normalizeDeadline(parsed.deadline),
       priority: Math.min(5, Math.max(1, Number(parsed.priority) || 1)),
       context: String(parsed.context || "").slice(0, 500),
       suggested_status: ["todo", "in_progress"].includes(parsed.suggested_status)
@@ -169,6 +196,8 @@ async function extractWithGroq(
         .replace("{subject}", subject)
         .replace("{body}", body.slice(0, 3000))
     : extractionPrompt
+        .replace(/{today}/g, today)
+        .replace(/{year}/g, year)
         .replace("{from}", from)
         .replace("{subject}", subject)
         .replace("{body}", body.slice(0, 3000));
@@ -215,6 +244,8 @@ async function extractWithGemini(
         .replace("{subject}", subject)
         .replace("{body}", body.slice(0, 3000))
     : extractionPrompt
+        .replace(/{today}/g, today)
+        .replace(/{year}/g, year)
         .replace("{from}", from)
         .replace("{subject}", subject)
         .replace("{body}", body.slice(0, 3000));

@@ -35,15 +35,15 @@ export function Header() {
           <Link href="/dashboard" className="text-lg font-bold">
             WorkBudi
           </Link>
-          <nav className="hidden sm:flex items-center gap-4">
+          <nav className="hidden sm:flex items-center gap-1">
             {navItems.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`text-sm transition-colors ${
+                className={`text-sm px-3 py-1.5 rounded-md transition-colors ${
                   pathname === item.href
-                    ? "text-foreground font-medium"
-                    : "text-muted-foreground hover:text-foreground"
+                    ? "bg-foreground text-background font-medium"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
                 }`}
               >
                 {item.label}
@@ -85,10 +85,10 @@ export function Header() {
               key={item.href}
               href={item.href}
               onClick={() => setMobileOpen(false)}
-              className={`block text-sm py-2 transition-colors ${
+              className={`block text-sm py-2 px-3 rounded-md transition-colors ${
                 pathname === item.href
-                  ? "text-foreground font-medium"
-                  : "text-muted-foreground hover:text-foreground"
+                  ? "bg-foreground text-background font-medium"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted"
               }`}
             >
               {item.label}

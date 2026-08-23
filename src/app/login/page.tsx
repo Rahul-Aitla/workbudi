@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function LoginPage() {
   const supabase = createClient();
@@ -18,17 +18,15 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/30">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">WorkBudi</CardTitle>
-          <CardDescription>
-            Your AI-powered work prioritization assistant
-          </CardDescription>
+    <div className="flex min-h-screen items-center justify-center bg-muted/30 px-4">
+      <Card className="w-full max-w-sm">
+        <CardHeader className="text-center space-y-1">
+          <CardTitle className="text-2xl font-bold tracking-tight">WorkBudi</CardTitle>
+          <p className="text-sm text-muted-foreground">Your work, prioritized. Automatically.</p>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-center text-sm text-muted-foreground">
-            Sign in to manage your goals, tasks, and let Robin help you prioritize your work.
+            Connect your Gmail and let Robin understand what needs your attention.
           </p>
           <Button onClick={handleGoogleLogin} className="w-full" size="lg">
             <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
@@ -52,7 +50,7 @@ export default function LoginPage() {
             Sign in with Google
           </Button>
           <p className="text-center text-xs text-muted-foreground">
-            This will also grant Gmail access for automatic task detection
+            Gmail access is used to detect work-related emails and keep tasks updated.
           </p>
         </CardContent>
       </Card>

@@ -29,12 +29,12 @@ export default async function GoalsPage() {
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
-      <main className="flex-1 p-6">
+      <main className="flex-1 p-4 sm:p-6">
         <div className="max-w-4xl mx-auto space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold">Goals</h1>
-              <p className="text-muted-foreground">
+              <h1 className="text-2xl font-bold tracking-tight">Goals</h1>
+              <p className="text-muted-foreground text-sm">
                 Define what you want to achieve. Robin uses these to prioritize your work.
               </p>
             </div>

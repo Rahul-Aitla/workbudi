@@ -215,16 +215,19 @@ export function EmailsList({ userId }: EmailsListProps) {
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
+      <CardHeader className="flex flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <CardTitle className="text-lg">Recent Emails</CardTitle>
+          <div className="flex items-center gap-2">
+            <div className={`h-2.5 w-2.5 rounded-full ${syncing || processing ? "bg-amber-500 animate-pulse" : "bg-green-500"}`} />
+            <CardTitle className="text-lg">Gmail</CardTitle>
+          </div>
           {unprocessedCount > 0 && (
-            <Badge variant="secondary">{unprocessedCount} unprocessed</Badge>
+            <Badge variant="secondary" className="bg-amber-100 text-amber-700">{unprocessedCount} new</Badge>
           )}
           {autoPolling && lastSyncTime && (
-            <Badge variant="outline" className="text-xs">
+            <span className="text-xs text-muted-foreground">
               {syncing || processing ? "Syncing..." : `Last synced ${Math.round((Date.now() - lastSyncTime.getTime()) / 1000)}s ago`}
-            </Badge>
+            </span>
           )}
         </div>
         <div className="flex gap-2">
@@ -266,25 +269,20 @@ export function EmailsList({ userId }: EmailsListProps) {
             <p className="text-xs text-muted-foreground mt-1">Emails will appear here automatically when synced.</p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2">
             {emails.map((email) => (
               <div
                 key={email.id}
-                className="flex items-start justify-between rounded-lg border p-3"
+                className={`flex items-start justify-between rounded-lg border p-3 transition-colors ${!email.processed ? "bg-blue-50/50 border-blue-100" : ""}`}
               >
                 <div className="space-y-1 min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium truncate">{email.subject}</p>
+                    <p className="text-sm font-medium truncate">{email.from_name || email.from_address}</p>
                     {!email.processed && (
-                      <Badge variant="secondary" className="shrink-0">New</Badge>
-                    )}
-                    {email.processed && (
-                      <Badge variant="outline" className="shrink-0">Processed</Badge>
+                      <Badge className="shrink-0 bg-blue-100 text-blue-700">New</Badge>
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    From: {email.from_name} ({email.from_address})
-                  </p>
+                  <p className="text-sm text-muted-foreground truncate">{email.subject}</p>
                   <p className="text-xs text-muted-foreground truncate">
                     {email.snippet}
                   </p>
