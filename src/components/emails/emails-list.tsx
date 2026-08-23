@@ -207,6 +207,7 @@ export function EmailsList({ userId }: EmailsListProps) {
   };
 
   const handleConnectGmail = async () => {
+    if (!window.confirm("This will sign you out so you can re-authenticate with Gmail permissions. Continue?")) return;
     await supabase.auth.signOut();
     window.location.href = "/login";
   };

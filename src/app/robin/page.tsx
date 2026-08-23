@@ -1,8 +1,15 @@
+import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
 import { Header } from "@/components/layout/header";
 import { ChatInterface } from "@/components/robin/chat-interface";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-export default function RobinPage() {
+export default async function RobinPage() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) redirect("/login");
+
   return (
     <div className="flex min-h-screen flex-col">
       <Header />

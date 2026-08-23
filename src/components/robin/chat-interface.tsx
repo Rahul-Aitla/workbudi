@@ -52,6 +52,7 @@ export function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const isLoadingRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -77,7 +78,8 @@ export function ChatInterface() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || loading) return;
+    if (!input.trim() || isLoadingRef.current) return;
+    isLoadingRef.current = true;
 
     const userMessage: Message = { role: "user", content: input.trim() };
     setMessages((prev) => [...prev, userMessage]);
@@ -95,6 +97,14 @@ export function ChatInterface() {
           })),
         }),
       });
+
+      if (!res.ok) {
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: `Server error (${res.status}). Please try again.` },
+        ]);
+        return;
+      }
 
       const data = await res.json();
 
@@ -131,6 +141,7 @@ export function ChatInterface() {
       ]);
     } finally {
       setLoading(false);
+      isLoadingRef.current = false;
     }
   };
 

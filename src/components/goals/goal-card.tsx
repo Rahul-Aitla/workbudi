@@ -24,7 +24,9 @@ export function GoalCard({ goal, onEdit, onDelete }: GoalCardProps) {
           <Button variant="outline" size="sm" onClick={onEdit}>
             Edit
           </Button>
-          <Button variant="outline" size="sm" onClick={onDelete}>
+          <Button variant="outline" size="sm" onClick={() => {
+            if (window.confirm(`Delete "${goal.title}"? This cannot be undone.`)) onDelete();
+          }}>
             Delete
           </Button>
         </div>

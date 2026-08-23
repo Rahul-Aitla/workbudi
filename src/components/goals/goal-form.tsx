@@ -17,10 +17,17 @@ interface GoalFormProps {
 export function GoalForm({ goal, onSave, onCancel }: GoalFormProps) {
   const [title, setTitle] = useState(goal?.title ?? "");
   const [description, setDescription] = useState(goal?.description ?? "");
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (title.trim()) onSave(title.trim(), description.trim());
+    if (!title.trim() || submitting) return;
+    setSubmitting(true);
+    try {
+      await onSave(title.trim(), description.trim());
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -51,7 +58,7 @@ export function GoalForm({ goal, onSave, onCancel }: GoalFormProps) {
             />
           </div>
           <div className="flex gap-2">
-            <Button type="submit">{goal ? "Update" : "Create"}</Button>
+            <Button type="submit" disabled={submitting}>{submitting ? "Saving..." : goal ? "Update" : "Create"}</Button>
             <Button type="button" variant="outline" onClick={onCancel}>
               Cancel
             </Button>

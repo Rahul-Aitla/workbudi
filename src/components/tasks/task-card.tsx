@@ -126,7 +126,9 @@ export function TaskCard({ task, email, onEdit, onDelete }: TaskCardProps) {
           <Button variant="outline" size="sm" onClick={onEdit}>
             Edit
           </Button>
-          <Button variant="outline" size="sm" onClick={onDelete} className="text-muted-foreground hover:text-destructive">
+          <Button variant="outline" size="sm" onClick={() => {
+            if (window.confirm(`Delete "${task.title}"? This cannot be undone.`)) onDelete();
+          }} className="text-muted-foreground hover:text-destructive">
             Delete
           </Button>
         </div>

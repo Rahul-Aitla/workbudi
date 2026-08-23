@@ -19,7 +19,7 @@ export default async function DashboardPage() {
   const totalTasks = tasksResult.count ?? 0;
   const doneTasks = tasksResult.data?.filter((t) => t.status === "done").length ?? 0;
   const pendingTasks = totalTasks - doneTasks;
-  const today = new Date().toISOString().split("T")[0];
+  const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in local timezone
   const dueSoonTasks = tasksResult.data?.filter(
     (t) => t.deadline && t.status !== "done" && t.deadline <= today
   ).length ?? 0;

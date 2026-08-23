@@ -20,11 +20,14 @@ export function TaskForm({ task, onSave, onCancel }: TaskFormProps) {
   const [priority, setPriority] = useState(task?.priority ?? 3);
   const [deadline, setDeadline] = useState(task?.deadline ?? "");
   const [status, setStatus] = useState<Task["status"]>(task?.status ?? "todo");
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (title.trim()) {
-      onSave({
+    if (!title.trim() || submitting) return;
+    setSubmitting(true);
+    try {
+      await onSave({
         title: title.trim(),
         description: description.trim() || null,
         priority,
@@ -33,6 +36,8 @@ export function TaskForm({ task, onSave, onCancel }: TaskFormProps) {
         source: task?.source ?? "manual",
         email_id: task?.email_id ?? null,
       });
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -104,7 +109,7 @@ export function TaskForm({ task, onSave, onCancel }: TaskFormProps) {
             </div>
           </div>
           <div className="flex gap-2">
-            <Button type="submit">{task ? "Update" : "Create"}</Button>
+            <Button type="submit" disabled={submitting}>{submitting ? "Saving..." : task ? "Update" : "Create"}</Button>
             <Button type="button" variant="outline" onClick={onCancel}>
               Cancel
             </Button>
