@@ -48,7 +48,9 @@ export function EmailsList({ userId }: EmailsListProps) {
   const supabase = createClient();
 
   // Keep ref in sync with state
-  emailsRef.current = emails;
+  useEffect(() => {
+    emailsRef.current = emails;
+  }, [emails]);
 
   const fetchEmails = useCallback(async () => {
     const { data } = await supabase
@@ -146,15 +148,7 @@ export function EmailsList({ userId }: EmailsListProps) {
     }
   }, [accessToken, fetchEmails]);
 
-  useEffect(() => {
-    const init = async () => {
-      await checkGmailConnection();
-      await fetchEmails();
-    };
-    init();
-  }, []);
-
-  const checkGmailConnection = async () => {
+  const checkGmailConnection = useCallback(async () => {
     const { data } = await supabase
       .from("linked_accounts")
       .select("access_token, expires_at")
@@ -210,7 +204,15 @@ export function EmailsList({ userId }: EmailsListProps) {
       return;
     }
 
-  };
+  }, [supabase, userId]);
+
+  useEffect(() => {
+    const init = async () => {
+      await checkGmailConnection();
+      await fetchEmails();
+    };
+    init();
+  }, [checkGmailConnection, fetchEmails]);
 
   const handleConnectGmail = async () => {
     if (!window.confirm("This will sign you out so you can re-authenticate with Gmail permissions. Continue?")) return;

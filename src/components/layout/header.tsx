@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, startTransition } from "react";
 import type { User } from "@supabase/supabase-js";
 
 const navItems = [
@@ -19,6 +19,13 @@ export function Header() {
   const pathname = usePathname();
   const supabase = createClient();
 
+  // Close mobile menu on route change
+  useEffect(() => {
+    startTransition(() => {
+      setMobileOpen(false);
+    });
+  }, [pathname]);
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUser(data.user));
 
@@ -28,11 +35,6 @@ export function Header() {
 
     return () => subscription.unsubscribe();
   }, [supabase]);
-
-  // Close mobile menu on route change
-  useEffect(() => {
-    setMobileOpen(false);
-  }, [pathname]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();

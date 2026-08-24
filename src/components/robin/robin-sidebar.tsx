@@ -7,12 +7,30 @@ import { Input } from "@/components/ui/input";
 import { RecommendationCard } from "./recommendation-card";
 import { parseRobinResponse } from "@/lib/robin/parse-response";
 import type { TaskRecommendation } from "@/lib/robin/parse-response";
-import { clearRobinCache } from "./robin-sidebar";
 
 const CACHE_KEY = "robin_recommendations";
 const CACHE_TTL = 5 * 60 * 1000;
 
-export { clearRobinCache };
+export function clearRobinCache() {
+  try { sessionStorage.removeItem(CACHE_KEY); } catch { /* ignore */ }
+}
+
+function saveCache(data: TaskRecommendation[]) {
+  try {
+    const timestamp = Date.now();
+    sessionStorage.setItem(CACHE_KEY, JSON.stringify({ data, timestamp }));
+  } catch { /* ignore */ }
+}
+
+function getCache(): TaskRecommendation[] | null {
+  try {
+    const cached = sessionStorage.getItem(CACHE_KEY);
+    if (!cached) return null;
+    const { data, timestamp } = JSON.parse(cached);
+    if (Date.now() - timestamp < CACHE_TTL) return data;
+  } catch { /* ignore */ }
+  return null;
+}
 
 interface Message {
   role: "user" | "assistant";
@@ -77,17 +95,12 @@ export function RobinSidebar({ userName }: RobinSidebarProps) {
   useEffect(() => {
     async function loadData() {
       try {
-        // Check cache first
-        const cached = sessionStorage.getItem(CACHE_KEY);
+        const cached = getCache();
         if (cached) {
-          const { data, timestamp } = JSON.parse(cached);
-          if (Date.now() - timestamp < CACHE_TTL) {
-            setRecommendations(data);
-            setLoading(false);
-            // Still fetch clarifications (not cached)
-            fetchClarifications();
-            return;
-          }
+          setRecommendations(cached);
+          setLoading(false);
+          fetchClarifications();
+          return;
         }
       } catch { /* ignore, fall through */ }
 
@@ -98,9 +111,7 @@ export function RobinSidebar({ userName }: RobinSidebarProps) {
           const { recommendations: recs } = parseRobinResponse(data.recommendations || data.response || "");
           const sliced = recs.slice(0, 3);
           setRecommendations(sliced);
-          try {
-            sessionStorage.setItem(CACHE_KEY, JSON.stringify({ data: sliced, timestamp: Date.now() }));
-          } catch { /* ignore */ }
+          saveCache(sliced);
         }
       } catch { /* ignore */ }
 
@@ -212,7 +223,7 @@ export function RobinSidebar({ userName }: RobinSidebarProps) {
             const { recommendations: recs } = parseRobinResponse(recData.recommendations || recData.response || "");
             const sliced = recs.slice(0, 3);
             setRecommendations(sliced);
-            sessionStorage.setItem(CACHE_KEY, JSON.stringify({ data: sliced, timestamp: Date.now() }));
+            saveCache(sliced);
           }
         } catch { /* ignore */ }
       }
