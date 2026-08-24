@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/components/ui/toast";
+import { clearRobinCache } from "@/components/robin/robin-sidebar";
 
 interface GmailEmail {
   id: string;
@@ -87,6 +88,7 @@ export function EmailsList({ userId }: EmailsListProps) {
         if (!silent) setProcessing(true);
         let totalProcessed = 0;
         let totalTasks = 0;
+        let totalClarifications = 0;
         let remaining = freshEmails.filter(e => !e.processed).length;
 
         try {
@@ -105,7 +107,9 @@ export function EmailsList({ userId }: EmailsListProps) {
 
             totalProcessed += processData.processed ?? 0;
             const batchTasks = processData.results?.filter((r: { status: string }) => r.status === "task_created" || r.status === "task_updated").length ?? 0;
+            const batchClarifications = processData.results?.filter((r: { status: string }) => r.status === "needs_clarification").length ?? 0;
             totalTasks += batchTasks;
+            totalClarifications += batchClarifications;
             remaining = processData.remaining ?? 0;
 
             await fetchEmails();
@@ -117,10 +121,14 @@ export function EmailsList({ userId }: EmailsListProps) {
           }
 
           if (!silent && totalProcessed > 0) {
+            if (totalTasks > 0 || totalClarifications > 0) clearRobinCache();
+            const parts = [];
+            if (totalTasks > 0) parts.push(`${totalTasks} task(s) created`);
+            if (totalClarifications > 0) parts.push(`${totalClarifications} need(s) your input`);
             toast.add({
               type: "success",
               title: "Emails analyzed",
-              description: `${totalTasks} task(s) created from ${totalProcessed} email(s)`,
+              description: `${parts.join(", ")} from ${totalProcessed} email(s)`,
             });
           }
         } catch (processError) {

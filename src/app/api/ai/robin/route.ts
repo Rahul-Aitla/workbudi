@@ -27,6 +27,10 @@ interface RobinContext {
     from_name: string | null;
     received_at: string | null;
   }[];
+  pendingClarifications: {
+    subject: string | null;
+    clarification_question: string | null;
+  }[];
 }
 
 async function loadContext(userId: string): Promise<RobinContext> {
@@ -39,7 +43,7 @@ async function loadContext(userId: string): Promise<RobinContext> {
     Date.now() - 7 * 24 * 60 * 60 * 1000
   ).toISOString();
 
-  const [goalsResult, tasksResult, emailsResult] = await Promise.all([
+  const [goalsResult, tasksResult, emailsResult, clarificationsResult] = await Promise.all([
     supabase
       .from("goals")
       .select("title, description")
@@ -56,6 +60,11 @@ async function loadContext(userId: string): Promise<RobinContext> {
       .gte("received_at", sevenDaysAgo)
       .order("received_at", { ascending: false })
       .limit(20),
+    supabase
+      .from("emails")
+      .select("subject, clarification_question")
+      .eq("user_id", userId)
+      .eq("processing_status", "needs_clarification"),
   ]);
 
   return {
@@ -63,6 +72,7 @@ async function loadContext(userId: string): Promise<RobinContext> {
     goals: goalsResult.data ?? [],
     tasks: tasksResult.data ?? [],
     recentEmails: emailsResult.data ?? [],
+    pendingClarifications: clarificationsResult.data ?? [],
   };
 }
 
@@ -134,6 +144,11 @@ ${tasksText}${overdueText}
 
 RECENT EMAILS (last 7 days):
 ${emailsText}
+
+PENDING CLARIFICATIONS:
+${context.pendingClarifications.length > 0
+  ? context.pendingClarifications.map((c) => `- "${c.subject || "Untitled"}" — ${c.clarification_question || "Needs more context"}`).join("\n")
+  : "None"}
 
 ========================================
 CAPABILITIES

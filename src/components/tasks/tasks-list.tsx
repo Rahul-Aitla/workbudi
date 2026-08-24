@@ -7,6 +7,7 @@ import { TaskForm } from "./task-form";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/components/ui/toast";
+import { clearRobinCache } from "@/components/robin/robin-sidebar";
 import type { Task, Email } from "@/types/database";
 
 interface TasksListProps {
@@ -62,6 +63,7 @@ export function TasksList({ initialTasks, userId }: TasksListProps) {
         if (error) throw error;
         if (data) {
           setTasks(tasks.map((t) => (t.id === data.id ? data : t)));
+          clearRobinCache();
           toast.add({ type: "success", title: "Task updated", description: `"${data.title}" has been updated` });
         }
       } else {
@@ -73,6 +75,7 @@ export function TasksList({ initialTasks, userId }: TasksListProps) {
         if (error) throw error;
         if (data) {
           setTasks([data, ...tasks]);
+          clearRobinCache();
           toast.add({ type: "success", title: "Task created", description: `"${data.title}" has been created` });
         }
       }
@@ -89,6 +92,7 @@ export function TasksList({ initialTasks, userId }: TasksListProps) {
       const { error } = await supabase.from("tasks").delete().eq("id", id);
       if (error) throw error;
       setTasks(tasks.filter((t) => t.id !== id));
+      clearRobinCache();
       toast.add({ type: "success", title: "Task deleted" });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to delete task";

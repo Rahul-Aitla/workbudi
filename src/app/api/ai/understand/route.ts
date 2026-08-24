@@ -202,6 +202,7 @@ export async function POST(request: Request) {
           status: "needs_clarification",
           task_id: null,
           reason: extraction.context,
+          task_title: extraction.task_title || null,
         });
       }
       // HANDLE NEW TASKS (only if not a follow-up)
@@ -306,9 +307,13 @@ export async function POST(request: Request) {
           .eq("id", email.id);
       } else {
         const status = results[results.length - 1]?.status ?? "no_action_required";
+        const updateData: Record<string, unknown> = { processed: true, processing_status: status };
+        if (status === "needs_clarification") {
+          updateData.clarification_question = extraction.context;
+        }
         await supabase
           .from("emails")
-          .update({ processed: true, processing_status: status })
+          .update(updateData)
           .eq("id", email.id);
       }
 

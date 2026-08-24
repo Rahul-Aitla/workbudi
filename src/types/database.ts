@@ -42,6 +42,7 @@ export interface Email {
   body: string | null;
   processed: boolean;
   processing_status: string;
+  clarification_question: string | null;
   in_reply_to: string | null;
   created_at: string;
 }
