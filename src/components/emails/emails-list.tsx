@@ -44,10 +44,19 @@ export function EmailsList({ userId }: EmailsListProps) {
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const [hasSynced, setHasSynced] = useState(false);
   const [visibleCount, setVisibleCount] = useState(15);
+
+  // Batch progress tracking
+  const [batchNumber, setBatchNumber] = useState(0);
+  const [totalBatches, setTotalBatches] = useState(0);
+  const [totalTasks, setTotalTasks] = useState(0);
+  const [totalUpdated, setTotalUpdated] = useState(0);
+  const [totalClarifications, setTotalClarifications] = useState(0);
+  const [processingError, setProcessingError] = useState<string | null>(null);
+
+  const stopRequested = useRef(false);
   const emailsRef = useRef(emails);
   const supabase = createClient();
 
-  // Keep ref in sync with state
   useEffect(() => {
     emailsRef.current = emails;
   }, [emails]);
@@ -79,22 +88,38 @@ export function EmailsList({ userId }: EmailsListProps) {
       if (data.error) {
         if (!silent) toast.add({ type: "error", title: "Sync failed", description: data.error });
       } else {
-        if (!silent && data.synced > 0) {
-          toast.add({ type: "success", title: "Emails synced", description: `${data.synced} new email(s) found` });
-        }
         const freshEmails = await fetchEmails();
         setLastSyncTime(new Date());
         setHasSynced(true);
 
         // Auto-chain: process all unprocessed emails in batches of 5
-        if (!silent) setProcessing(true);
+        if (!silent) {
+          setProcessing(true);
+          setProcessingError(null);
+          setTotalTasks(0);
+          setTotalUpdated(0);
+          setTotalClarifications(0);
+        }
+
+        const unprocessedCount = freshEmails.filter(e => !e.processed).length;
+        const batches = Math.ceil(unprocessedCount / 5);
+        if (!silent) setTotalBatches(batches);
+
         let totalProcessed = 0;
-        let totalTasks = 0;
-        let totalClarifications = 0;
-        let remaining = freshEmails.filter(e => !e.processed).length;
+        let runningTasks = 0;
+        let runningUpdated = 0;
+        let runningClarifications = 0;
+        let remaining = unprocessedCount;
+        let batchNum = 0;
+        stopRequested.current = false;
 
         try {
           while (remaining > 0) {
+            if (stopRequested.current) break;
+
+            batchNum++;
+            if (!silent) setBatchNumber(batchNum);
+
             const processRes = await fetch("/api/ai/understand", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -103,38 +128,53 @@ export function EmailsList({ userId }: EmailsListProps) {
             const processData = await processRes.json();
 
             if (processData.error) {
-              if (!silent) toast.add({ type: "error", title: "Processing stopped", description: processData.error });
+              setProcessingError(processData.error);
               break;
             }
 
             totalProcessed += processData.processed ?? 0;
-            const batchTasks = processData.results?.filter((r: { status: string }) => r.status === "task_created" || r.status === "task_updated").length ?? 0;
-            const batchClarifications = processData.results?.filter((r: { status: string }) => r.status === "needs_clarification").length ?? 0;
-            totalTasks += batchTasks;
-            totalClarifications += batchClarifications;
-            remaining = processData.remaining ?? 0;
+            const batchTasks = processData.results?.filter(
+              (r: { status: string }) => r.status === "task_created"
+            ).length ?? 0;
+            const batchUpdates = processData.results?.filter(
+              (r: { status: string }) => r.status === "task_updated"
+            ).length ?? 0;
+            const batchClarifications = processData.results?.filter(
+              (r: { status: string }) => r.status === "needs_clarification"
+            ).length ?? 0;
 
+            runningTasks += batchTasks;
+            runningUpdated += batchUpdates;
+            runningClarifications += batchClarifications;
+
+            if (!silent) {
+              setTotalTasks(runningTasks);
+              setTotalUpdated(runningUpdated);
+              setTotalClarifications(runningClarifications);
+            }
+
+            remaining = processData.remaining ?? 0;
             await fetchEmails();
 
-            // Small delay between batches to respect rate limits
             if (remaining > 0) {
               await new Promise((r) => setTimeout(r, 1000));
             }
           }
 
           if (!silent && totalProcessed > 0) {
-            if (totalTasks > 0 || totalClarifications > 0) clearRobinCache();
+            if (runningTasks > 0 || runningClarifications > 0) clearRobinCache();
             const parts = [];
-            if (totalTasks > 0) parts.push(`${totalTasks} task(s) created`);
-            if (totalClarifications > 0) parts.push(`${totalClarifications} need(s) your input`);
+            if (runningTasks > 0) parts.push(`${runningTasks} task${runningTasks !== 1 ? "s" : ""} created`);
+            if (runningUpdated > 0) parts.push(`${runningUpdated} updated`);
+            if (runningClarifications > 0) parts.push(`${runningClarifications} need${runningClarifications !== 1 ? "s" : ""} your input`);
             toast.add({
               type: "success",
-              title: "Emails analyzed",
-              description: `${parts.join(", ")} from ${totalProcessed} email(s)`,
+              title: "Gmail synced",
+              description: `${totalProcessed} email${totalProcessed !== 1 ? "s" : ""} analyzed · ${parts.join(" · ")}`,
             });
           }
         } catch (processError) {
-          if (!silent) toast.add({ type: "error", title: "Processing failed", description: "Check console for details" });
+          setProcessingError("Check console for details");
           console.error("Auto-process failed:", processError);
         } finally {
           if (!silent) setProcessing(false);
@@ -147,6 +187,15 @@ export function EmailsList({ userId }: EmailsListProps) {
       if (!silent) setSyncing(false);
     }
   }, [accessToken, fetchEmails]);
+
+  const handleStopProcessing = useCallback(() => {
+    stopRequested.current = true;
+  }, []);
+
+  const handleRetryProcessing = useCallback(() => {
+    setProcessingError(null);
+    handleSync(true);
+  }, [handleSync]);
 
   const checkGmailConnection = useCallback(async () => {
     const { data } = await supabase
@@ -166,7 +215,6 @@ export function EmailsList({ userId }: EmailsListProps) {
       }
     }
 
-    // Fallback: try to get token from Supabase session
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.provider_token) {
       const tokenExpiry = new Date(
@@ -242,36 +290,110 @@ export function EmailsList({ userId }: EmailsListProps) {
     );
   }
 
-  const pendingCount = emails.filter((e) => e.processing_status === "pending" || !e.processed).length;
+  const showProgress = (syncing || processing || processingError) && totalBatches > 0;
 
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <div className={`h-2.5 w-2.5 rounded-full ${syncing || processing ? "bg-amber-500 animate-pulse" : "bg-green-500"}`} />
+            <div className={`h-2.5 w-2.5 rounded-full ${
+              processingError ? "bg-red-500" :
+              syncing || processing ? "bg-amber-500 animate-pulse" :
+              "bg-green-500"
+            }`} />
             <CardTitle className="text-lg">Gmail</CardTitle>
           </div>
-          {pendingCount > 0 && (
-            <Badge variant="secondary" className="bg-amber-100 text-amber-700">{pendingCount} pending</Badge>
-          )}
-          {lastSyncTime && (
-            <span className="text-xs text-muted-foreground">
-              {syncing ? "Syncing Gmail..." : processing ? "Analyzing emails..." : `Last synced ${formatTimeAgo(lastSyncTime)}`}
-            </span>
-          )}
+          <span className="text-xs text-muted-foreground">
+            {syncing ? "Syncing Gmail..." :
+             processingError ? "Processing stopped" :
+             processing ? `Analyzing emails · Batch ${batchNumber} of ${totalBatches}` :
+             lastSyncTime ? `Connected · Last synced ${formatTimeAgo(lastSyncTime)}` :
+             "Connected"}
+          </span>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleSync()}
-            disabled={syncing || processing}
-          >
-            {syncing ? "Syncing..." : processing ? "Analyzing..." : "Sync Gmail"}
-          </Button>
+          {processingError ? (
+            <>
+              <Button variant="outline" size="sm" onClick={handleRetryProcessing}>
+                Retry
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => handleSync()}>
+                Sync Gmail
+              </Button>
+            </>
+          ) : processing ? (
+            <Button variant="outline" size="sm" onClick={handleStopProcessing}>
+              Stop
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleSync()}
+              disabled={syncing}
+            >
+              {syncing ? "Syncing..." : "Sync Gmail"}
+            </Button>
+          )}
         </div>
       </CardHeader>
+
+      {/* Progress bar + running totals during processing */}
+      {showProgress && (
+        <div className="px-6 pb-4 space-y-3">
+          <div className="w-full bg-muted rounded-full h-1.5">
+            <div
+              className="bg-primary h-1.5 rounded-full transition-all duration-500"
+              style={{ width: `${(batchNumber / totalBatches) * 100}%` }}
+            />
+          </div>
+          <div className="flex flex-wrap gap-3 text-xs">
+            {totalTasks > 0 && (
+              <span className="flex items-center gap-1 text-green-600">
+                ✓ {totalTasks} task{totalTasks !== 1 ? "s" : ""} created
+              </span>
+            )}
+            {totalUpdated > 0 && (
+              <span className="flex items-center gap-1 text-blue-600">
+                ↻ {totalUpdated} task{totalUpdated !== 1 ? "s" : ""} updated
+              </span>
+            )}
+            {totalClarifications > 0 && (
+              <span className="flex items-center gap-1 text-amber-600">
+                🟡 {totalClarifications} need{totalClarifications !== 1 ? "s" : ""} your input
+              </span>
+            )}
+          </div>
+          {processingError && (
+            <p className="text-xs text-red-600">{processingError}</p>
+          )}
+        </div>
+      )}
+
+      {/* Completed summary after processing finishes */}
+      {!syncing && !processing && !processingError && lastSyncTime && (totalTasks > 0 || totalUpdated > 0 || totalClarifications > 0) && (
+        <div className="px-6 pb-4">
+          <div className="flex flex-wrap gap-3 text-xs">
+            {totalTasks > 0 && (
+              <span className="flex items-center gap-1 text-green-600">
+                ✓ {totalTasks} task{totalTasks !== 1 ? "s" : ""} created
+              </span>
+            )}
+            {totalUpdated > 0 && (
+              <span className="flex items-center gap-1 text-blue-600">
+                ↻ {totalUpdated} task{totalUpdated !== 1 ? "s" : ""} updated
+              </span>
+            )}
+            {totalClarifications > 0 && (
+              <span className="flex items-center gap-1 text-amber-600">
+                🟡 {totalClarifications} need{totalClarifications !== 1 ? "s" : ""} your input
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
       <CardContent>
         {loading ? (
           <p className="text-sm text-muted-foreground">Loading emails...</p>
