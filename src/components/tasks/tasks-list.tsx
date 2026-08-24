@@ -102,7 +102,7 @@ export function TasksList({ initialTasks, userId }: TasksListProps) {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex flex-wrap gap-2">
           {(["all", "todo", "in_progress", "done"] as const).map((f) => (
@@ -142,7 +142,7 @@ export function TasksList({ initialTasks, userId }: TasksListProps) {
         </div>
       )}
 
-      <div className="space-y-3">
+      <div className="space-y-4">
         {filteredTasks.map((task) => (
           <TaskCard
             key={task.id}

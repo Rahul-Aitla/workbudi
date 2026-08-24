@@ -15,13 +15,12 @@ interface GmailEmail {
   from_address: string;
   received_at: string;
   processed: boolean;
+  processing_status: string;
 }
 
 interface EmailsListProps {
   userId: string;
 }
-
-const POLL_INTERVAL = 30000;
 
 function formatTimeAgo(date: Date): string {
   const seconds = Math.round((Date.now() - date.getTime()) / 1000);
@@ -42,9 +41,8 @@ export function EmailsList({ userId }: EmailsListProps) {
   const [gmailConnected, setGmailConnected] = useState(false);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
-  const [autoPolling, setAutoPolling] = useState(false);
   const [hasSynced, setHasSynced] = useState(false);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [visibleCount, setVisibleCount] = useState(15);
   const emailsRef = useRef(emails);
   const supabase = createClient();
 
@@ -56,11 +54,11 @@ export function EmailsList({ userId }: EmailsListProps) {
       .from("emails")
       .select("*")
       .eq("user_id", userId)
-      .order("received_at", { ascending: false })
-      .limit(20);
+      .order("received_at", { ascending: false });
 
     setEmails(data ?? []);
     setLoading(false);
+    return data ?? [];
   }, [supabase, userId]);
 
   const handleSync = useCallback(async (silent = false) => {
@@ -81,9 +79,56 @@ export function EmailsList({ userId }: EmailsListProps) {
         if (!silent && data.synced > 0) {
           toast.add({ type: "success", title: "Emails synced", description: `${data.synced} new email(s) found` });
         }
-        await fetchEmails();
+        const freshEmails = await fetchEmails();
         setLastSyncTime(new Date());
         setHasSynced(true);
+
+        // Auto-chain: process all unprocessed emails in batches of 5
+        if (!silent) setProcessing(true);
+        let totalProcessed = 0;
+        let totalTasks = 0;
+        let remaining = freshEmails.filter(e => !e.processed).length;
+
+        try {
+          while (remaining > 0) {
+            const processRes = await fetch("/api/ai/understand", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({}),
+            });
+            const processData = await processRes.json();
+
+            if (processData.error) {
+              if (!silent) toast.add({ type: "error", title: "Processing stopped", description: processData.error });
+              break;
+            }
+
+            totalProcessed += processData.processed ?? 0;
+            const batchTasks = processData.results?.filter((r: { status: string }) => r.status === "task_created" || r.status === "task_updated").length ?? 0;
+            totalTasks += batchTasks;
+            remaining = processData.remaining ?? 0;
+
+            await fetchEmails();
+
+            // Small delay between batches to respect rate limits
+            if (remaining > 0) {
+              await new Promise((r) => setTimeout(r, 1000));
+            }
+          }
+
+          if (!silent && totalProcessed > 0) {
+            toast.add({
+              type: "success",
+              title: "Emails analyzed",
+              description: `${totalTasks} task(s) created from ${totalProcessed} email(s)`,
+            });
+          }
+        } catch (processError) {
+          if (!silent) toast.add({ type: "error", title: "Processing failed", description: "Check console for details" });
+          console.error("Auto-process failed:", processError);
+        } finally {
+          if (!silent) setProcessing(false);
+        }
       }
     } catch (error) {
       if (!silent) toast.add({ type: "error", title: "Sync failed", description: "Check console for details" });
@@ -93,42 +138,6 @@ export function EmailsList({ userId }: EmailsListProps) {
     }
   }, [accessToken, fetchEmails]);
 
-  const handleProcess = useCallback(async (silent = false) => {
-    const currentUnprocessed = emailsRef.current.filter((e) => !e.processed).length;
-    if (currentUnprocessed === 0) return;
-    if (!silent) setProcessing(true);
-
-    try {
-      const res = await fetch("/api/ai/understand", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-      });
-      const data = await res.json();
-
-      if (data.error) {
-        if (!silent) toast.add({ type: "error", title: "Processing failed", description: data.error });
-      } else {
-        const tasksCreated = data.results?.filter((r: { extraction: { action_required: boolean } }) => r.extraction.action_required).length ?? 0;
-        if (!silent && data.processed > 0) {
-          toast.add({ type: "success", title: "Emails processed", description: `${tasksCreated} task(s) created/updated from ${data.processed} email(s)` });
-        }
-        await fetchEmails();
-      }
-    } catch (error) {
-      if (!silent) toast.add({ type: "error", title: "Processing failed", description: "Check console for details" });
-      console.error("Process failed:", error);
-    } finally {
-      if (!silent) setProcessing(false);
-    }
-  }, [fetchEmails]);
-
-  const runAutoPoll = useCallback(async () => {
-    if (!accessToken) return;
-    await handleSync(true);
-    await handleProcess(true);
-  }, [accessToken, handleSync, handleProcess]);
-
   useEffect(() => {
     const init = async () => {
       await checkGmailConnection();
@@ -136,17 +145,6 @@ export function EmailsList({ userId }: EmailsListProps) {
     };
     init();
   }, []);
-
-  useEffect(() => {
-    if (pollRef.current) clearInterval(pollRef.current);
-    if (autoPolling && gmailConnected && accessToken) {
-      runAutoPoll();
-      pollRef.current = setInterval(runAutoPoll, POLL_INTERVAL);
-    }
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, [autoPolling, gmailConnected, accessToken, runAutoPoll]);
 
   const checkGmailConnection = async () => {
     const { data } = await supabase
@@ -234,7 +232,7 @@ export function EmailsList({ userId }: EmailsListProps) {
     );
   }
 
-  const unprocessedCount = emails.filter((e) => !e.processed).length;
+  const pendingCount = emails.filter((e) => e.processing_status === "pending" || !e.processed).length;
 
   return (
     <Card>
@@ -244,40 +242,24 @@ export function EmailsList({ userId }: EmailsListProps) {
             <div className={`h-2.5 w-2.5 rounded-full ${syncing || processing ? "bg-amber-500 animate-pulse" : "bg-green-500"}`} />
             <CardTitle className="text-lg">Gmail</CardTitle>
           </div>
-          {unprocessedCount > 0 && (
-            <Badge variant="secondary" className="bg-amber-100 text-amber-700">{unprocessedCount} new</Badge>
+          {pendingCount > 0 && (
+            <Badge variant="secondary" className="bg-amber-100 text-amber-700">{pendingCount} pending</Badge>
           )}
           {lastSyncTime && (
             <span className="text-xs text-muted-foreground">
-              {syncing || processing ? "Syncing..." : `Last synced ${formatTimeAgo(lastSyncTime)}`}
+              {syncing ? "Syncing Gmail..." : processing ? "Analyzing emails..." : `Last synced ${formatTimeAgo(lastSyncTime)}`}
             </span>
           )}
         </div>
         <div className="flex gap-2">
           <Button
-            variant={autoPolling ? "default" : "outline"}
-            size="sm"
-            onClick={() => setAutoPolling(!autoPolling)}
-          >
-            {autoPolling ? "Auto: ON" : "Auto: OFF"}
-          </Button>
-          <Button
             variant="outline"
             size="sm"
             onClick={() => handleSync()}
-            disabled={syncing}
+            disabled={syncing || processing}
           >
-            {syncing ? "Syncing..." : "Sync"}
+            {syncing ? "Syncing..." : processing ? "Analyzing..." : "Sync Gmail"}
           </Button>
-          {unprocessedCount > 0 && (
-            <Button
-              size="sm"
-              onClick={() => handleProcess()}
-              disabled={processing}
-            >
-              {processing ? "Processing..." : `Process ${Math.min(5, unprocessedCount)}`}
-            </Button>
-          )}
         </div>
       </CardHeader>
       <CardContent>
@@ -304,28 +286,88 @@ export function EmailsList({ userId }: EmailsListProps) {
           </div>
         ) : (
           <div className="space-y-2">
-            {emails.map((email) => (
-              <div
-                key={email.id}
-                className={`flex items-start justify-between rounded-lg border p-3 transition-colors ${!email.processed ? "bg-blue-50/50 border-blue-100" : ""}`}
-              >
-                <div className="space-y-1 min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium truncate">{email.from_name || email.from_address}</p>
-                    {!email.processed && (
-                      <Badge className="shrink-0 bg-blue-100 text-blue-700">New</Badge>
+            {emails.slice(0, visibleCount).map((email) => {
+              const status = email.processing_status || (email.processed ? "no_action_required" : "pending");
+              const rowStyle = !email.processed
+                ? "bg-blue-50/50 border-blue-100"
+                : status === "task_created"
+                ? "bg-green-50/30 border-green-100"
+                : status === "task_updated"
+                ? "bg-blue-50/30 border-blue-100"
+                : status === "needs_clarification"
+                ? "bg-amber-50/30 border-amber-100"
+                : status === "ai_failed"
+                ? "bg-orange-50/30 border-orange-100"
+                : "";
+
+              return (
+                <div
+                  key={email.id}
+                  className={`flex items-start justify-between rounded-lg border p-3 transition-colors ${rowStyle}`}
+                >
+                  <div className="space-y-1 min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium truncate">{email.from_name || email.from_address}</p>
+                      {status === "pending" && (
+                        <Badge className="shrink-0 bg-gray-100 text-gray-600">Pending</Badge>
+                      )}
+                      {status === "task_created" && (
+                        <Badge className="shrink-0 bg-green-100 text-green-700">✓ Task created</Badge>
+                      )}
+                      {status === "task_updated" && (
+                        <Badge className="shrink-0 bg-blue-100 text-blue-700">↻ Task updated</Badge>
+                      )}
+                      {status === "no_action_required" && (
+                        <Badge variant="secondary" className="shrink-0 text-muted-foreground">No action</Badge>
+                      )}
+                      {status === "needs_clarification" && (
+                        <Badge className="shrink-0 bg-amber-100 text-amber-700">? Needs clarification</Badge>
+                      )}
+                      {status === "ai_failed" && (
+                        <Badge className="shrink-0 bg-orange-100 text-orange-700">⟳ Needs retry</Badge>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground truncate">{email.subject}</p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {email.snippet}
+                    </p>
+                    {status === "needs_clarification" && (
+                      <a
+                        href="/robin"
+                        className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-1"
+                      >
+                        <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M12 8V4H8" />
+                          <rect width="16" height="12" x="4" y="8" rx="2" />
+                          <path d="M2 14h2" />
+                          <path d="M20 14h2" />
+                        </svg>
+                        Ask Robin about this
+                      </a>
                     )}
                   </div>
-                  <p className="text-sm text-muted-foreground truncate">{email.subject}</p>
-                  <p className="text-xs text-muted-foreground truncate">
-                    {email.snippet}
-                  </p>
+                  <span className="text-xs text-muted-foreground whitespace-nowrap ml-3">
+                    {new Date(email.received_at).toLocaleDateString()}
+                  </span>
                 </div>
-                <span className="text-xs text-muted-foreground whitespace-nowrap ml-3">
-                  {new Date(email.received_at).toLocaleDateString()}
-                </span>
+              );
+            })}
+            {visibleCount < emails.length && (
+              <div className="text-center pt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setVisibleCount((prev) => prev + 15)}
+                >
+                  Load more ({emails.length - visibleCount} remaining)
+                </Button>
               </div>
-            ))}
+            )}
+            {emails.length > 0 && (
+              <p className="text-xs text-muted-foreground text-center pt-1">
+                Showing {Math.min(visibleCount, emails.length)} of {emails.length} emails
+              </p>
+            )}
           </div>
         )}
       </CardContent>

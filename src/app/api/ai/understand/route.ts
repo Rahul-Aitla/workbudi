@@ -125,6 +125,8 @@ export async function POST(request: Request) {
           console.log(`[AI] Followup: status changed to ${changes.new_status}`);
         }
 
+        let taskId: string | null = null;
+
         if (Object.keys(updateData).length > 0 && email.thread_id) {
           const { data: threadEmails } = await supabase
             .from("emails")
@@ -136,16 +138,35 @@ export async function POST(request: Request) {
           if (threadEmails && threadEmails.length > 0) {
             const threadEmailIds = threadEmails.map((e) => e.id);
             console.log(`[AI] Updating task via thread emails:`, threadEmailIds);
-            const { error: updateError } = await supabase
+
+            // Find the existing task first to store previous values
+            const { data: existingTask } = await supabase
               .from("tasks")
-              .update({ ...updateData, updated_at: new Date().toISOString() })
+              .select("id, deadline, priority")
               .eq("user_id", user.id)
               .in("email_id", threadEmailIds)
-              .neq("status", "done");
-            if (updateError) {
-              console.error(`[AI] Task update error:`, updateError);
-            } else {
-              console.log(`[AI] Task updated successfully:`, updateData);
+              .neq("status", "done")
+              .single();
+
+            if (existingTask) {
+              taskId = existingTask.id;
+              // Store previous values before overwriting
+              if (changes.deadline_changed && existingTask.deadline) {
+                updateData.previous_deadline = existingTask.deadline;
+              }
+              if (changes.priority_changed && existingTask.priority) {
+                updateData.previous_priority = existingTask.priority;
+              }
+
+              const { error: updateError } = await supabase
+                .from("tasks")
+                .update({ ...updateData, updated_at: new Date().toISOString() })
+                .eq("id", existingTask.id);
+              if (updateError) {
+                console.error(`[AI] Task update error:`, updateError);
+              } else {
+                console.log(`[AI] Task updated successfully:`, updateData);
+              }
             }
           }
 
@@ -153,7 +174,9 @@ export async function POST(request: Request) {
             email_id: email.id,
             subject: email.subject,
             extraction,
-            task_updated: true,
+            status: "task_updated",
+            task_id: taskId,
+            reason: extraction.context,
             followup_changes: changes,
           });
         } else {
@@ -162,14 +185,28 @@ export async function POST(request: Request) {
             email_id: email.id,
             subject: email.subject,
             extraction,
+            status: "no_action_required",
+            task_id: null,
+            reason: "Followup email but no task changes detected",
             followup_changes: null,
-            note: "Followup email but no task changes detected",
           });
         }
       }
+      // HANDLE NEEDS CLARIFICATION
+      else if (extraction.needs_clarification) {
+        console.log(`[AI] Email needs clarification: "${extraction.context}"`);
+        results.push({
+          email_id: email.id,
+          subject: email.subject,
+          extraction,
+          status: "needs_clarification",
+          task_id: null,
+          reason: extraction.context,
+        });
+      }
       // HANDLE NEW TASKS (only if not a follow-up)
       else if (extraction.action_required && extraction.task_title) {
-          // Original: check for duplicate tasks — but only if same sender
+          // Check for duplicate tasks — but only if same sender
           const { data: existingTasks } = await supabase
             .from("tasks")
             .select("id, title, priority, deadline, email_id")
@@ -212,6 +249,8 @@ export async function POST(request: Request) {
             }
           }
 
+          let taskId: string | null = linkedTaskId;
+
           if (!linkedTaskId) {
             console.log(`[AI] Creating new task: "${extraction.task_title}"`);
             const { data: newTask, error: insertError } = await supabase
@@ -233,7 +272,7 @@ export async function POST(request: Request) {
               console.error("[AI] Task insert error:", insertError);
             } else {
               console.log(`[AI] Created task: ${newTask?.id}`);
-              linkedTaskId = newTask?.id ?? null;
+              taskId = newTask?.id ?? null;
             }
           }
 
@@ -241,18 +280,35 @@ export async function POST(request: Request) {
             email_id: email.id,
             subject: email.subject,
             extraction,
-            task_created: !linkedTaskId,
-            task_updated: !!linkedTaskId,
+            status: linkedTaskId ? "task_updated" : "task_created",
+            task_id: taskId,
+            reason: extraction.context,
           });
         }
+      // HANDLE NO ACTION REQUIRED
+      else {
+        results.push({
+          email_id: email.id,
+          subject: email.subject,
+          extraction,
+          status: "no_action_required",
+          task_id: null,
+          reason: extraction.context,
+        });
+      }
 
-      // Mark email as processed (only if AI didn't fail)
+      // Mark email as processed with appropriate status
       if (extraction.ai_failed) {
         console.log(`[AI] Email ${email.id} AI failed — will retry later`);
-      } else {
         await supabase
           .from("emails")
-          .update({ processed: true })
+          .update({ processing_status: "ai_failed" })
+          .eq("id", email.id);
+      } else {
+        const status = results[results.length - 1]?.status ?? "no_action_required";
+        await supabase
+          .from("emails")
+          .update({ processed: true, processing_status: status })
           .eq("id", email.id);
       }
 

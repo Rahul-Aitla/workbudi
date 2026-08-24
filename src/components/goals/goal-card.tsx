@@ -13,14 +13,14 @@ interface GoalCardProps {
 export function GoalCard({ goal, onEdit, onDelete }: GoalCardProps) {
   return (
     <Card>
-      <CardHeader className="pb-2">
+      <CardHeader className="pb-3">
         <CardTitle className="text-lg">{goal.title}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         {goal.description && (
           <p className="text-sm text-muted-foreground">{goal.description}</p>
         )}
-        <div className="flex gap-2">
+        <div className="flex gap-2 pt-2">
           <Button variant="outline" size="sm" onClick={onEdit}>
             Edit
           </Button>

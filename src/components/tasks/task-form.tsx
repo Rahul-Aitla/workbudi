@@ -35,6 +35,8 @@ export function TaskForm({ task, onSave, onCancel }: TaskFormProps) {
         status,
         source: task?.source ?? "manual",
         email_id: task?.email_id ?? null,
+        previous_deadline: task?.previous_deadline ?? null,
+        previous_priority: task?.previous_priority ?? null,
       });
     } finally {
       setSubmitting(false);

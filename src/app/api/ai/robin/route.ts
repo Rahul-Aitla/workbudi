@@ -154,7 +154,7 @@ OUTPUT FORMAT
 After your natural language response, ALWAYS append a structured data block on a new line:
 
 <!--RECOMMENDATIONS
-{"recommendations": [{"rank": 1, "title": "task title", "task_id": "uuid or null", "priority": 1-5, "deadline": "YYYY-MM-DD or null", "why": "short reason", "is_overdue": false}, ...], "summary": "one line summary", "tips": ["tip1", "tip2"]}
+{"recommendations": [{"rank": 1, "title": "task title", "task_id": "uuid or null", "priority": 1-5, "deadline": "YYYY-MM-DD or null", "why": "short reason", "is_overdue": false, "source": "email or manual"}, ...], "summary": "one line summary", "tips": ["tip1", "tip2"]}
 -->
 
 This block MUST be on its own line starting with <!--RECOMMENDATIONS and ending with -->.
@@ -218,6 +218,45 @@ async function chatWithGemini(
   const lastMessage = messages[messages.length - 1];
   const result = await chat.sendMessage(lastMessage.content);
   return result.response.text();
+}
+
+export async function GET() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const context = await loadContext(user.id);
+    const systemPrompt = buildSystemPrompt(context);
+
+    const initMessage: ChatMessage = {
+      role: "user",
+      content: "What should I work on today? Give me your top recommendations.",
+    };
+
+    let response: string;
+    try {
+      response = await chatWithGroq(systemPrompt, [initMessage]);
+      console.log("[Robin GET] Used Groq");
+    } catch (groqError) {
+      console.warn("[Robin GET] Groq failed, falling back to Gemini:", groqError);
+      response = await chatWithGemini(systemPrompt, [initMessage]);
+      console.log("[Robin GET] Used Gemini");
+    }
+
+    return NextResponse.json({ response });
+  } catch (error) {
+    console.error("[Robin GET] All LLM providers failed:", error);
+    return NextResponse.json(
+      { error: "Robin is unavailable right now." },
+      { status: 500 }
+    );
+  }
 }
 
 export async function POST(request: Request) {

@@ -4,8 +4,9 @@ import { useState, useRef, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MessageBubble, type TaskRecommendation } from "./message-bubble";
+import { MessageBubble } from "./message-bubble";
 import { ActionCard, type ActionResult } from "./action-card";
+import { parseRobinResponse, extractAction, type TaskRecommendation } from "@/lib/robin/parse-response";
 
 interface Message {
   role: "user" | "assistant";
@@ -14,38 +15,6 @@ interface Message {
   summary?: string;
   tips?: string[];
   action?: ActionResult;
-}
-
-function parseRobinResponse(content: string) {
-  let cleanText = content;
-  let recommendations: TaskRecommendation[] = [];
-  let summary = "";
-  let tips: string[] = [];
-
-  const structMatch = content.match(/<!--RECOMMENDATIONS\s*\n?([\s\S]*?)-->/);
-  if (structMatch) {
-    try {
-      const parsed = JSON.parse(structMatch[1]);
-      recommendations = parsed.recommendations ?? [];
-      summary = parsed.summary ?? "";
-      tips = parsed.tips ?? [];
-    } catch { /* ignore parse errors */ }
-    cleanText = content.replace(/<!--RECOMMENDATIONS\s*\n?[\s\S]*?-->/, "").trim();
-  }
-
-  cleanText = cleanText.replace(/\{"action":\s*"[^"]+",\s*"params":\s*\{[\s\S]*?\}\}/g, "").trim();
-
-  return { cleanText, recommendations, summary, tips };
-}
-
-function extractAction(content: string) {
-  const actionMatch = content.match(/\{"action":\s*"[^"]+",\s*"params":\s*\{[^}]+\}\}/);
-  if (!actionMatch) return null;
-  try {
-    const parsed = JSON.parse(actionMatch[0]);
-    if (parsed.action && parsed.params) return { action: parsed.action, params: parsed.params };
-  } catch { /* ignore */ }
-  return null;
 }
 
 export function ChatInterface() {
@@ -149,7 +118,7 @@ export function ChatInterface() {
     <div className="flex flex-col h-[calc(100vh-12rem)]">
       <div className="flex-1 overflow-y-auto space-y-4 p-4">
         {messages.length === 0 && (
-          <div className="text-center text-muted-foreground space-y-4 py-12">
+          <div className="text-center text-muted-foreground space-y-5 py-16">
             <div className="w-16 h-16 mx-auto rounded-full bg-primary/10 flex items-center justify-center">
               <svg className="h-8 w-8 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M12 8V4H8" />
@@ -160,18 +129,28 @@ export function ChatInterface() {
                 <path d="M9 13v2" />
               </svg>
             </div>
-            <h2 className="text-xl font-semibold text-foreground">Robin AI Assistant</h2>
-            <p className="max-w-md mx-auto">I analyze your goals, tasks, and emails to tell you what to focus on right now.</p>
-            <div className="flex flex-wrap justify-center gap-2 pt-2">
-              {[
-                "What should I work on today?",
-                "Show me overdue tasks",
-                "Create a task for tomorrow",
-              ].map((s) => (
-                <Button key={s} variant="outline" size="sm" onClick={() => setInput(s)}>
-                  {s}
-                </Button>
-              ))}
+            <div className="space-y-1.5">
+              <h2 className="text-xl font-semibold text-foreground">Robin AI Assistant</h2>
+              <p className="text-sm font-medium text-primary">Your work, prioritized.</p>
+            </div>
+            <p className="max-w-md mx-auto text-sm leading-relaxed">
+              Robin looks at your goals, tasks, deadlines, and recent Gmail context
+              to help you decide what deserves your attention.
+            </p>
+            <div className="space-y-2 pt-1">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Try asking</p>
+              <div className="flex flex-wrap justify-center gap-2">
+                {[
+                  "What should I work on today?",
+                  "What is overdue?",
+                  "What changed today?",
+                  "What needs my attention?",
+                ].map((s) => (
+                  <Button key={s} variant="outline" size="sm" onClick={() => setInput(s)} className="text-xs">
+                    {s}
+                  </Button>
+                ))}
+              </div>
             </div>
           </div>
         )}

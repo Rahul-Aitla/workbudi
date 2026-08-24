@@ -23,6 +23,8 @@ export interface Task {
   status: "todo" | "in_progress" | "done";
   source: "manual" | "email";
   email_id: string | null;
+  previous_deadline: string | null;
+  previous_priority: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -39,6 +41,7 @@ export interface Email {
   received_at: string | null;
   body: string | null;
   processed: boolean;
+  processing_status: string;
   in_reply_to: string | null;
   created_at: string;
 }

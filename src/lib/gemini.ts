@@ -6,6 +6,7 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY ?? "");
 
 interface EmailExtraction {
   action_required: boolean;
+  needs_clarification: boolean;
   task_title: string;
   deadline: string | null;
   priority: number;
@@ -30,10 +31,12 @@ ALWAYS action_required=false for: job alerts, newsletters, marketing, system not
 
 ALWAYS action_required=true ONLY for: a real person asking you to do something, emails with a clear deadline, direct requests from colleagues/clients.
 
+If an email seems like it might require action but you cannot determine the priority or deadline (e.g. "Can you take a look at this?" without context), set needs_clarification=true and action_required=false. Do NOT create a task for ambiguous emails.
+
 IMPORTANT: Today is {today}. The current year is {year}. When extracting a deadline, ALWAYS use the current year ({year}) unless the email explicitly states a different year. If the email says "Monday" or "next week", calculate the actual date based on today ({today}).
 
 Return ONLY this JSON, nothing else:
-{"action_required":true/false,"task_title":"what to do or empty","deadline":"YYYY-MM-DD or null","priority":1-5,"context":"brief summary","suggested_status":"todo or in_progress","is_followup":false,"followup_changes":null}
+{"action_required":true/false,"needs_clarification":false,"task_title":"what to do or empty","deadline":"YYYY-MM-DD or null","priority":1-5,"context":"brief summary","suggested_status":"todo or in_progress","is_followup":false,"followup_changes":null}
 
 Email from: {from}
 Subject: {subject}
@@ -57,10 +60,10 @@ Detect if this reply changes the task. Look for:
 - Status change ("done", "cancel this")
 
 Return JSON only:
-{"action_required":true,"task_title":"what changed","deadline":"new date or null","priority":3,"context":"what changed","suggested_status":"todo","is_followup":true,"followup_changes":{"deadline_changed":false,"priority_changed":false,"status_changed":false,"new_deadline":null,"new_priority":null,"new_status":null,"change_summary":"what changed"}}
+{"action_required":true,"needs_clarification":false,"task_title":"what changed","deadline":"new date or null","priority":3,"context":"what changed","suggested_status":"todo","is_followup":true,"followup_changes":{"deadline_changed":false,"priority_changed":false,"status_changed":false,"new_deadline":null,"new_priority":null,"new_status":null,"change_summary":"what changed"}}
 
 If this reply has NO changes (just "thanks", "ok", "got it"), return:
-{"action_required":false,"task_title":"","deadline":null,"priority":1,"context":"no changes","suggested_status":"todo","is_followup":true,"followup_changes":null}`;
+{"action_required":false,"needs_clarification":false,"task_title":"","deadline":null,"priority":1,"context":"no changes","suggested_status":"todo","is_followup":true,"followup_changes":null}`;
 
 function stripThinking(text: string): string {
   return text.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
@@ -139,6 +142,7 @@ function parseExtraction(text: string): EmailExtraction {
   if (!jsonStr) {
     return {
       action_required: false,
+      needs_clarification: false,
       task_title: "",
       deadline: null,
       priority: 1,
@@ -154,6 +158,7 @@ function parseExtraction(text: string): EmailExtraction {
     const parsed = JSON.parse(jsonStr);
     return {
       action_required: Boolean(parsed.action_required),
+      needs_clarification: Boolean(parsed.needs_clarification),
       task_title: String(parsed.task_title || "").slice(0, 100),
       deadline: normalizeDeadline(parsed.deadline),
       priority: Math.min(5, Math.max(1, Number(parsed.priority) || 1)),
@@ -168,6 +173,7 @@ function parseExtraction(text: string): EmailExtraction {
   } catch {
     return {
       action_required: false,
+      needs_clarification: false,
       task_title: "",
       deadline: null,
       priority: 1,
@@ -299,6 +305,7 @@ export async function extractTaskFromEmail(
 
   return {
     action_required: false,
+    needs_clarification: false,
     task_title: "",
     deadline: null,
     priority: 1,

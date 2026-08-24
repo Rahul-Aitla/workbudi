@@ -40,7 +40,7 @@ export function Header() {
   };
 
   return (
-    <header className="border-b bg-card">
+    <header className="sticky top-0 z-50 border-b bg-card">
       <div className="flex h-14 items-center justify-between px-4 sm:px-6">
         <div className="flex items-center gap-6">
           <Link href="/dashboard" className="text-lg font-bold">
