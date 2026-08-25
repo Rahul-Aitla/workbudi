@@ -32,12 +32,22 @@ ALWAYS action_required=false for: job alerts, newsletters, marketing, system not
 
 ALWAYS action_required=true ONLY for: a real person asking you to do something, emails with a clear deadline, direct requests from colleagues/clients.
 
-If an email seems like it might require action but you cannot determine what the sender wants, what action to take, or key context (not just deadline/priority), set needs_clarification=true and action_required=false. Generate a clear clarification_question asking WHAT the email is about or what the sender needs. Do NOT create a task for ambiguous emails.
+CRITICAL RULES for needs_clarification:
+Set needs_clarification=true and action_required=false when ANY of these are true:
+- The email has NO deadline and NO specific deliverable (e.g. "Can you take a look at this?", "Let me know what you think", "Check this out")
+- The task is vague with no clear end state (what does "done" look like?)
+- The email is ambiguous about what action to take
+When needs_clarification=true, generate a clarification_question that asks WHAT specifically needs to be done and WHEN it's needed. Be specific — don't just ask "What do you want?" — reference the email content.
+
+For example:
+- "Can you take a look at this?" → clarification_question: "What would you like me to do with the investor proposal, and when do you need it by?"
+- "Review the ML assignment" (no deadline) → clarification_question: "When do you need the ML assignment review completed by?"
+- "Fix the bug in production" (clear action, no deadline) → needs_clarification=true, clarification_question: "When does this need to be fixed by?"
 
 IMPORTANT: Today is {today}. The current year is {year}. When extracting a deadline, ALWAYS use the current year ({year}) unless the email explicitly states a different year. If the email says "Monday" or "next week", calculate the actual date based on today ({today}).
 
 Return ONLY this JSON, nothing else:
-{"action_required":true/false,"needs_clarification":false,"task_title":"what to do or empty","deadline":"YYYY-MM-DD or null","priority":1-5,"context":"brief summary","clarification_question":"ask what the sender wants or what action to take — only when needs_clarification=true","suggested_status":"todo or in_progress","is_followup":false,"followup_changes":null}
+{"action_required":true/false,"needs_clarification":false,"task_title":"what to do or empty","deadline":"YYYY-MM-DD or null","priority":1-5,"context":"brief summary","clarification_question":"specific question about what to do and when — only when needs_clarification=true","suggested_status":"todo or in_progress","is_followup":false,"followup_changes":null}
 
 Email from: {from}
 Subject: {subject}

@@ -236,16 +236,6 @@ export function RobinSidebar({ userName }: RobinSidebarProps) {
     }
   };
 
-  // Determine what's missing from the clarification
-  const getMissingFields = (q: string | null) => {
-    if (!q) return { deadline: true, priority: false };
-    const lower = q.toLowerCase();
-    return {
-      deadline: lower.includes("when") || lower.includes("deadline") || lower.includes("date") || lower.includes("time") || lower.includes("day"),
-      priority: lower.includes("important") || lower.includes("priority") || lower.includes("urgent"),
-    };
-  };
-
   const today = new Date().toISOString().split("T")[0];
   const endOfWeek = new Date();
   endOfWeek.setDate(endOfWeek.getDate() + (5 - endOfWeek.getDay()));
@@ -304,83 +294,75 @@ export function RobinSidebar({ userName }: RobinSidebarProps) {
                   )}
                 </div>
 
-                {(() => {
-                  const missing = getMissingFields(clarifyingEmail.clarification_question);
-                  return (
-                    <div className="space-y-2">
-                      {missing.deadline && (
-                        <div className="space-y-1.5">
-                          <p className="text-xs font-medium text-muted-foreground">When should this be done?</p>
-                          <div className="flex flex-wrap gap-1.5">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="text-xs"
-                              disabled={clarifyLoading}
-                              onClick={() => handleClarify(today)}
-                            >
-                              Today
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="text-xs"
-                              disabled={clarifyLoading}
-                              onClick={() => handleClarify(endOfWeekStr)}
-                            >
-                              This week
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="text-xs"
-                              disabled={clarifyLoading}
-                              onClick={() => handleClarify(nextWeekStr)}
-                            >
-                              Later
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-                      <div className="space-y-1.5">
-                        <p className="text-xs font-medium text-muted-foreground">What should I do with this email?</p>
-                        <div className="flex gap-2">
-                          <Input
-                            placeholder="Describe what the sender wants..."
-                            value={clarifyContext}
-                            onChange={(e) => setClarifyContext(e.target.value)}
-                            className="text-xs"
-                            disabled={clarifyLoading}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" && !e.shiftKey && clarifyContext.trim()) {
-                                e.preventDefault();
-                                handleClarify(null, clarifyContext.trim());
-                              }
-                            }}
-                          />
-                          <Button
-                            size="sm"
-                            className="text-xs shrink-0"
-                            disabled={clarifyLoading || !clarifyContext.trim()}
-                            onClick={() => handleClarify(null, clarifyContext.trim())}
-                          >
-                            {clarifyLoading ? "..." : "Ask"}
-                          </Button>
-                        </div>
-                      </div>
-                      {!missing.deadline && !clarifyContext && (
-                        <Button
-                          className="w-full text-xs"
-                          size="sm"
-                          disabled={clarifyLoading}
-                          onClick={() => handleClarify(null)}
-                        >
-                          {clarifyLoading ? "Creating..." : "Create task without deadline"}
-                        </Button>
-                      )}
+                <div className="space-y-2">
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-medium text-muted-foreground">When should this be done?</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-xs"
+                        disabled={clarifyLoading}
+                        onClick={() => handleClarify(today)}
+                      >
+                        Today
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-xs"
+                        disabled={clarifyLoading}
+                        onClick={() => handleClarify(endOfWeekStr)}
+                      >
+                        This week
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-xs"
+                        disabled={clarifyLoading}
+                        onClick={() => handleClarify(nextWeekStr)}
+                      >
+                        Later
+                      </Button>
                     </div>
-                  );
-                })()}
+                  </div>
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-medium text-muted-foreground">What should I do with this email?</p>
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Describe what the sender wants..."
+                        value={clarifyContext}
+                        onChange={(e) => setClarifyContext(e.target.value)}
+                        className="text-xs"
+                        disabled={clarifyLoading}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey && clarifyContext.trim()) {
+                            e.preventDefault();
+                            handleClarify(null, clarifyContext.trim());
+                          }
+                        }}
+                      />
+                      <Button
+                        size="sm"
+                        className="text-xs shrink-0"
+                        disabled={clarifyLoading || !clarifyContext.trim()}
+                        onClick={() => handleClarify(null, clarifyContext.trim())}
+                      >
+                        {clarifyLoading ? "..." : "Ask"}
+                      </Button>
+                    </div>
+                  </div>
+                  <Button
+                    className="w-full text-xs"
+                    size="sm"
+                    variant="ghost"
+                    disabled={clarifyLoading}
+                    onClick={() => handleClarify(null)}
+                  >
+                    {clarifyLoading ? "Creating..." : "Skip — create task without details"}
+                  </Button>
+                </div>
               </div>
             )}
           </div>

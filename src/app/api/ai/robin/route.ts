@@ -174,8 +174,10 @@ After your natural language response, ALWAYS append a structured data block on a
 
 This block MUST be on its own line starting with <!--RECOMMENDATIONS and ending with -->.
 
-When the user asks to perform an action (move deadline, create task, create goal, change status), also include:
+When the user asks to perform an action (move deadline, create task, create goal, change status), you MUST include the action JSON. Do NOT just describe the action in text — the system needs the JSON to actually execute it:
 {"action": "action_name", "params": { ... }}
+
+CRITICAL: If you say "I've created a task" or "Goal created" without the action JSON, nothing actually happens. The JSON is what triggers the real action.
 
 Available actions:
 - update_task_deadline: {"action": "update_task_deadline", "params": {"task_id": "uuid", "new_deadline": "YYYY-MM-DD"}}
@@ -191,7 +193,8 @@ RULES
 - Keep your natural language response SHORT (2-3 sentences max) — the UI shows structured cards separately
 - Be direct and actionable, not verbose
 - If overdue tasks exist, mention them first
-- When recommending tasks, explain how they relate to the user's goals`;
+- When recommending tasks, explain how they relate to the user's goals
+- When performing an action (create task/goal, update deadline/status/priority), ALWAYS include the action JSON — never just describe it in words`;
 }
 
 async function chatWithGroq(
