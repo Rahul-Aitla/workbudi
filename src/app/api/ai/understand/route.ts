@@ -309,7 +309,7 @@ export async function POST(request: Request) {
         const status = results[results.length - 1]?.status ?? "no_action_required";
         const updateData: Record<string, unknown> = { processed: true, processing_status: status };
         if (status === "needs_clarification") {
-          updateData.clarification_question = extraction.context;
+          updateData.clarification_question = extraction.clarification_question || extraction.context;
         }
         await supabase
           .from("emails")

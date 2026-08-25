@@ -11,6 +11,7 @@ interface EmailExtraction {
   deadline: string | null;
   priority: number;
   context: string;
+  clarification_question: string;
   suggested_status: "todo" | "in_progress";
   ai_failed: boolean;
   is_followup: boolean;
@@ -31,12 +32,12 @@ ALWAYS action_required=false for: job alerts, newsletters, marketing, system not
 
 ALWAYS action_required=true ONLY for: a real person asking you to do something, emails with a clear deadline, direct requests from colleagues/clients.
 
-If an email seems like it might require action but you cannot determine the priority or deadline (e.g. "Can you take a look at this?" without context), set needs_clarification=true and action_required=false. Do NOT create a task for ambiguous emails.
+If an email seems like it might require action but you cannot determine what the sender wants, what action to take, or key context (not just deadline/priority), set needs_clarification=true and action_required=false. Generate a clear clarification_question asking WHAT the email is about or what the sender needs. Do NOT create a task for ambiguous emails.
 
 IMPORTANT: Today is {today}. The current year is {year}. When extracting a deadline, ALWAYS use the current year ({year}) unless the email explicitly states a different year. If the email says "Monday" or "next week", calculate the actual date based on today ({today}).
 
 Return ONLY this JSON, nothing else:
-{"action_required":true/false,"needs_clarification":false,"task_title":"what to do or empty","deadline":"YYYY-MM-DD or null","priority":1-5,"context":"brief summary","suggested_status":"todo or in_progress","is_followup":false,"followup_changes":null}
+{"action_required":true/false,"needs_clarification":false,"task_title":"what to do or empty","deadline":"YYYY-MM-DD or null","priority":1-5,"context":"brief summary","clarification_question":"ask what the sender wants or what action to take — only when needs_clarification=true","suggested_status":"todo or in_progress","is_followup":false,"followup_changes":null}
 
 Email from: {from}
 Subject: {subject}
@@ -147,6 +148,7 @@ function parseExtraction(text: string): EmailExtraction {
       deadline: null,
       priority: 1,
       context: "Could not parse",
+      clarification_question: "",
       suggested_status: "todo",
       ai_failed: true,
       is_followup: false,
@@ -163,6 +165,7 @@ function parseExtraction(text: string): EmailExtraction {
       deadline: normalizeDeadline(parsed.deadline),
       priority: Math.min(5, Math.max(1, Number(parsed.priority) || 1)),
       context: String(parsed.context || "").slice(0, 500),
+      clarification_question: String(parsed.clarification_question || "").slice(0, 500),
       suggested_status: ["todo", "in_progress"].includes(parsed.suggested_status)
         ? parsed.suggested_status
         : "todo",
@@ -178,6 +181,7 @@ function parseExtraction(text: string): EmailExtraction {
       deadline: null,
       priority: 1,
       context: "JSON parse failed",
+      clarification_question: "",
       suggested_status: "todo",
       ai_failed: true,
       is_followup: false,
@@ -310,6 +314,7 @@ export async function extractTaskFromEmail(
     deadline: null,
     priority: 1,
     context: "AI failed",
+    clarification_question: "",
     suggested_status: "todo",
     ai_failed: true,
     is_followup: false,
@@ -329,4 +334,66 @@ export function calculateSimilarity(a: string, b: string): number {
   const union = new Set([...aWords, ...bWords]);
 
   return intersection.length / union.size;
+}
+
+const clarificationExtractionPrompt = `You are extracting task details from a user's clarification answer.
+
+Original email subject: {subject}
+Clarification question asked: {clarification_question}
+User's answer: {user_answer}
+
+Extract a clean task title, deadline, priority, and description from the user's answer.
+If the user mentions a date, calculate it based on today ({today}).
+Priority: 1=Low, 2=Medium-Low, 3=Medium, 4=High, 5=Critical. Default to 3 if not mentioned.
+
+Return ONLY this JSON:
+{"task_title":"clean task title","deadline":"YYYY-MM-DD or null","priority":1-5,"description":"what the user wants to do"}`;
+
+export async function extractFromClarification(
+  subject: string,
+  clarificationQuestion: string,
+  userAnswer: string,
+): Promise<{ task_title: string; deadline: string | null; priority: number; description: string }> {
+  const today = new Date().toISOString().split("T")[0];
+  const year = new Date().getFullYear();
+  const prompt = clarificationExtractionPrompt
+    .replace("{subject}", subject)
+    .replace("{clarification_question}", clarificationQuestion)
+    .replace("{user_answer}", userAnswer)
+    .replace("{today}", today)
+    .replace("{today}", today)
+    .replace("{year}", String(year));
+
+  try {
+    const completion = await groq.chat.completions.create({
+      messages: [{ role: "user", content: prompt }],
+      model: "openai/gpt-oss-20b",
+      temperature: 0.1,
+      max_tokens: 500,
+    });
+
+    const content = completion.choices[0]?.message?.content ?? "";
+    const cleaned = stripThinking(content);
+    const jsonStr = extractJson(cleaned);
+
+    if (jsonStr) {
+      const parsed = JSON.parse(jsonStr);
+      return {
+        task_title: String(parsed.task_title || subject || "Untitled task").slice(0, 100),
+        deadline: normalizeDeadline(parsed.deadline),
+        priority: Math.min(5, Math.max(1, Number(parsed.priority) || 3)),
+        description: String(parsed.description || userAnswer).slice(0, 500),
+      };
+    }
+  } catch (error) {
+    console.error("[Clarify] LLM extraction failed, using simple extraction:", error);
+  }
+
+  // Fallback: simple extraction without LLM
+  return {
+    task_title: subject || "Untitled task",
+    deadline: null,
+    priority: 3,
+    description: userAnswer,
+  };
 }

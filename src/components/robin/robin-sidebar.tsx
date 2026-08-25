@@ -82,6 +82,7 @@ export function RobinSidebar({ userName }: RobinSidebarProps) {
   const [clarifyingEmail, setClarifyingEmail] = useState<ClarificationEmail | null>(null);
   const [clarifyLoading, setClarifyLoading] = useState(false);
   const [clarifySuccess, setClarifySuccess] = useState<{ title: string; deadline: string | null } | null>(null);
+  const [clarifyContext, setClarifyContext] = useState("");
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -198,7 +199,7 @@ export function RobinSidebar({ userName }: RobinSidebarProps) {
     }
   };
 
-  const handleClarify = async (deadline: string | null) => {
+  const handleClarify = async (deadline: string | null, context?: string) => {
     if (!clarifyingEmail) return;
     setClarifyLoading(true);
 
@@ -206,12 +207,13 @@ export function RobinSidebar({ userName }: RobinSidebarProps) {
       const res = await fetch("/api/ai/clarify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email_id: clarifyingEmail.id, deadline }),
+        body: JSON.stringify({ email_id: clarifyingEmail.id, deadline, context: context || undefined }),
       });
       const data = await res.json();
 
       if (data.task) {
         setClarifySuccess({ title: data.task.title, deadline: data.task.deadline });
+        setClarifyContext("");
         clearRobinCache();
         // Remove from pending list
         setClarifications((prev) => prev.filter((c) => c.id !== clarifyingEmail.id));
@@ -340,7 +342,33 @@ export function RobinSidebar({ userName }: RobinSidebarProps) {
                           </div>
                         </div>
                       )}
-                      {!missing.deadline && (
+                      <div className="space-y-1.5">
+                        <p className="text-xs font-medium text-muted-foreground">What should I do with this email?</p>
+                        <div className="flex gap-2">
+                          <Input
+                            placeholder="Describe what the sender wants..."
+                            value={clarifyContext}
+                            onChange={(e) => setClarifyContext(e.target.value)}
+                            className="text-xs"
+                            disabled={clarifyLoading}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && !e.shiftKey && clarifyContext.trim()) {
+                                e.preventDefault();
+                                handleClarify(null, clarifyContext.trim());
+                              }
+                            }}
+                          />
+                          <Button
+                            size="sm"
+                            className="text-xs shrink-0"
+                            disabled={clarifyLoading || !clarifyContext.trim()}
+                            onClick={() => handleClarify(null, clarifyContext.trim())}
+                          >
+                            {clarifyLoading ? "..." : "Ask"}
+                          </Button>
+                        </div>
+                      </div>
+                      {!missing.deadline && !clarifyContext && (
                         <Button
                           className="w-full text-xs"
                           size="sm"
