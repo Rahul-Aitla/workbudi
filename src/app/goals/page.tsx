@@ -43,7 +43,7 @@ export default async function GoalsPage() {
           {totalTasks > 0 && (
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Overall Progress</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground tracking-wider uppercase">Overall Progress</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="flex items-center gap-4">

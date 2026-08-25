@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useEffect, useState, startTransition } from "react";
 import type { User } from "@supabase/supabase-js";
@@ -17,7 +17,12 @@ export function Header() {
   const [user, setUser] = useState<User | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
   const supabase = createClient();
+
+  const isActive = (href: string) =>
+    pathname === href ||
+    (href !== "/dashboard" && pathname.startsWith(href + "/"));
 
   // Close mobile menu on route change
   useEffect(() => {
@@ -38,7 +43,7 @@ export function Header() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    window.location.href = "/login";
+    router.push("/login");
   };
 
   return (
@@ -54,7 +59,7 @@ export function Header() {
                 key={item.href}
                 href={item.href}
                 className={`text-sm px-3 py-1.5 rounded-md transition-colors ${
-                  pathname === item.href
+                  isActive(item.href)
                     ? "bg-foreground text-background font-medium"
                     : "text-muted-foreground hover:text-foreground hover:bg-muted"
                 }`}
@@ -99,7 +104,7 @@ export function Header() {
               href={item.href}
               onClick={() => setMobileOpen(false)}
               className={`block text-sm py-2 px-3 rounded-md transition-colors ${
-                pathname === item.href
+                isActive(item.href)
                   ? "bg-foreground text-background font-medium"
                   : "text-muted-foreground hover:text-foreground hover:bg-muted"
               }`}

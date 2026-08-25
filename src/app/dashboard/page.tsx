@@ -44,7 +44,7 @@ export default async function DashboardPage() {
             <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">Goals</CardTitle>
+                  <CardTitle className="text-sm font-medium text-muted-foreground tracking-wider uppercase">Goals</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="text-3xl font-bold">{goalsResult.count ?? 0}</div>
@@ -55,7 +55,7 @@ export default async function DashboardPage() {
               </Card>
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">Pending Tasks</CardTitle>
+                  <CardTitle className="text-sm font-medium text-muted-foreground tracking-wider uppercase">Pending Tasks</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="text-3xl font-bold">{pendingTasks}</div>
@@ -68,7 +68,7 @@ export default async function DashboardPage() {
               </Card>
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">Emails Synced</CardTitle>
+                  <CardTitle className="text-sm font-medium text-muted-foreground tracking-wider uppercase">Emails Synced</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="text-3xl font-bold">{emailsResult.count ?? 0}</div>
